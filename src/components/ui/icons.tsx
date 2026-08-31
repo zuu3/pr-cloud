@@ -1,5 +1,13 @@
 type P = React.SVGProps<SVGSVGElement>;
 
+/** brand mark — filled rounded square with a play glyph */
+export const Logo = ({ className = "size-7" }: { className?: string }) => (
+  <svg viewBox="0 0 28 28" className={className} aria-hidden>
+    <rect width="28" height="28" rx="8" fill="#3182f6" />
+    <path d="M11 9.2v9.6l8-4.8-8-4.8Z" fill="#fff" />
+  </svg>
+);
+
 function Svg({ children, ...p }: P & { children: React.ReactNode }) {
   return (
     <svg
