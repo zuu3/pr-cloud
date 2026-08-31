@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { useMutation } from "@tanstack/react-query";
 import { humanSize } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { apiFetch } from "@/components/providers";
 import { useDialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 
@@ -14,17 +15,21 @@ export function TrashList({ initial }: { initial: Row[] }) {
   const toast = useToast();
   const [rows, setRows] = useState<Row[]>(initial);
 
-  async function bulk(action: "restore" | "purge", ids: string[]) {
-    const res = await fetch("/api/videos/bulk", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ids, action }),
-    });
-    if (!res.ok) return toast.show("작업에 실패했어요", "err");
-    const { count } = await res.json();
-    setRows((x) => x.filter((r) => !ids.includes(r.id)));
-    toast.show(action === "restore" ? `${count}개를 되살렸어요` : `${count}개를 삭제했어요`);
-  }
+  const m = useMutation({
+    mutationFn: (v: { action: "restore" | "purge"; ids: string[] }) =>
+      apiFetch("/api/videos/bulk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids: v.ids, action: v.action }),
+      }),
+    onSuccess: (data, v) => {
+      setRows((x) => x.filter((r) => !v.ids.includes(r.id)));
+      toast.show(v.action === "restore" ? `${data.count}개를 되살렸어요` : `${data.count}개를 삭제했어요`);
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
+  const pendingAction = m.isPending ? m.variables?.action : undefined;
 
   async function emptyTrash() {
     const ok = await dialog.confirm({
@@ -33,7 +38,7 @@ export function TrashList({ initial }: { initial: Row[] }) {
       danger: true,
       confirmText: "휴지통 비우기",
     });
-    if (ok) void bulk("purge", rows.map((r) => r.id));
+    if (ok) m.mutate({ action: "purge", ids: rows.map((r) => r.id) });
   }
 
   async function purgeOne(r: Row) {
@@ -43,7 +48,7 @@ export function TrashList({ initial }: { initial: Row[] }) {
       danger: true,
       confirmText: "영구 삭제",
     });
-    if (ok) void bulk("purge", [r.id]);
+    if (ok) m.mutate({ action: "purge", ids: [r.id] });
   }
 
   if (rows.length === 0) {
@@ -53,11 +58,6 @@ export function TrashList({ initial }: { initial: Row[] }) {
           🗑️
         </div>
         <p className="mt-4 text-[16px] font-semibold text-foreground">휴지통이 비어 있어요</p>
-        <Link href="/" className="mt-5">
-          <Button variant="ghost" size="md" className="border border-border">
-            보관함으로
-          </Button>
-        </Link>
       </div>
     );
   }
@@ -69,11 +69,17 @@ export function TrashList({ initial }: { initial: Row[] }) {
           variant="ghost"
           size="md"
           className="border border-border"
-          onClick={() => bulk("restore", rows.map((r) => r.id))}
+          onClick={() => m.mutate({ action: "restore", ids: rows.map((r) => r.id) })}
+          loading={pendingAction === "restore"}
         >
           전체 되살리기
         </Button>
-        <Button variant="danger" size="md" onClick={emptyTrash}>
+        <Button
+          variant="danger"
+          size="md"
+          onClick={emptyTrash}
+          loading={pendingAction === "purge" && (m.variables?.ids.length ?? 0) > 1}
+        >
           휴지통 비우기
         </Button>
       </div>
@@ -91,7 +97,7 @@ export function TrashList({ initial }: { initial: Row[] }) {
               </p>
             </div>
             <button
-              onClick={() => bulk("restore", [r.id])}
+              onClick={() => m.mutate({ action: "restore", ids: [r.id] })}
               className="rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-weak-fg hover:bg-weak-bg"
             >
               되살리기

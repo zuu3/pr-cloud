@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { humanSize, humanDuration } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { apiFetch } from "@/components/providers";
 import { useDialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 
@@ -91,19 +93,67 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     });
   }
 
-  async function bulk(action: "trash" | "move", folderIdArg?: string | null) {
-    const ids = [...sel];
-    const res = await fetch("/api/videos/bulk", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ids, action, folderId: folderIdArg }),
-    });
-    if (!res.ok) return toast.show("작업에 실패했어요", "err");
-    const { count } = await res.json();
-    setVideos((v) => v.filter((x) => !sel.has(x.id)));
-    setSel(new Set());
-    toast.show(action === "trash" ? `${count}개를 삭제했어요` : `${count}개를 옮겼어요`);
+  const currentFolder = folders.find((f) => f.id === folderId);
+  const childFolders = folders.filter((f) => (f.parentId ?? undefined) === folderId);
+
+  // full ancestor chain: 보관함 / … / current
+  const trail: Folder[] = [];
+  for (let f = currentFolder; f; f = folders.find((x) => x.id === f!.parentId)) {
+    trail.unshift(f);
   }
+
+  const bulkM = useMutation({
+    mutationFn: (v: { action: "trash" | "move"; folderId?: string | null; ids: string[] }) =>
+      apiFetch("/api/videos/bulk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids: v.ids, action: v.action, folderId: v.folderId }),
+      }),
+    onSuccess: (data, v) => {
+      setVideos((list) => list.filter((x) => !v.ids.includes(x.id)));
+      setSel(new Set());
+      toast.show(v.action === "trash" ? `${data.count}개를 삭제했어요` : `${data.count}개를 옮겼어요`);
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
+  const newFolderM = useMutation({
+    mutationFn: (name: string) =>
+      apiFetch("/api/folders", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, parentId: folderId }),
+      }),
+    onSuccess: () => {
+      router.refresh();
+      toast.show("폴더를 만들었어요");
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
+  const renameFolderM = useMutation({
+    mutationFn: (name: string) =>
+      apiFetch(`/api/folders/${currentFolder!.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      }),
+    onSuccess: () => {
+      router.refresh();
+      toast.show("이름을 바꿨어요");
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
+  const deleteFolderM = useMutation({
+    mutationFn: () => apiFetch(`/api/folders/${currentFolder!.id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      router.push(currentFolder!.parentId ? `/?folderId=${currentFolder!.parentId}` : "/");
+      router.refresh();
+      toast.show("폴더를 삭제했어요");
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
 
   async function bulkDelete() {
     const ok = await dialog.confirm({
@@ -112,7 +162,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       danger: true,
       confirmText: "삭제",
     });
-    if (ok) void bulk("trash");
+    if (ok) bulkM.mutate({ action: "trash", ids: [...sel] });
   }
 
   async function bulkMove() {
@@ -126,45 +176,28 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       ],
     });
     if (picked === null) return;
-    void bulk("move", picked || null);
+    bulkM.mutate({ action: "move", folderId: picked || null, ids: [...sel] });
   }
 
-  const currentFolder = folders.find((f) => f.id === folderId);
-  const childFolders = folders.filter((f) => (f.parentId ?? undefined) === folderId);
-
   async function newFolder() {
-    const name = await dialog.prompt({ title: "새 폴더", label: "폴더 이름", confirmText: "만들기" });
-    if (!name) return;
-    const res = await fetch("/api/folders", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, parentId: folderId }),
+    const name = await dialog.prompt({
+      title: "새 폴더",
+      label: "폴더 이름 (최대 20자)",
+      confirmText: "만들기",
+      maxLength: 20,
     });
-    if (res.ok) {
-      router.refresh();
-      toast.show("폴더를 만들었어요");
-    } else {
-      toast.show((await res.json().catch(() => ({}))).error ?? "폴더를 만들지 못했어요", "err");
-    }
+    if (name) newFolderM.mutate(name);
   }
 
   async function renameFolder() {
     if (!currentFolder) return;
     const name = await dialog.prompt({
       title: "폴더 이름 변경",
-      label: "새 이름",
+      label: "새 이름 (최대 20자)",
       initial: currentFolder.name,
+      maxLength: 20,
     });
-    if (!name || name === currentFolder.name) return;
-    const res = await fetch(`/api/folders/${currentFolder.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (res.ok) {
-      router.refresh();
-      toast.show("이름을 바꿨어요");
-    } else toast.show("이름을 바꾸지 못했어요", "err");
+    if (name && name !== currentFolder.name) renameFolderM.mutate(name);
   }
 
   async function deleteFolder() {
@@ -175,31 +208,36 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       danger: true,
       confirmText: "삭제",
     });
-    if (!ok) return;
-    const res = await fetch(`/api/folders/${currentFolder.id}`, { method: "DELETE" });
-    if (res.status === 204) {
-      router.push(currentFolder.parentId ? `/?folderId=${currentFolder.parentId}` : "/");
-      router.refresh();
-      toast.show("폴더를 삭제했어요");
-    } else {
-      toast.show((await res.json().catch(() => ({}))).error ?? "삭제하지 못했어요", "err");
-    }
+    if (ok) deleteFolderM.mutate();
   }
 
   return (
     <main className="mx-auto max-w-[1120px] px-6 py-10 pb-24 sm:py-12">
       {currentFolder && (
-        <nav className="mb-2 flex items-center gap-1.5 text-[13px] text-muted">
-          <Link href="/" className="hover:text-body">
+        <nav className="mb-2 flex flex-wrap items-center gap-1.5 text-[13px] text-muted">
+          <Link href="/" className="shrink-0 hover:text-body">
             보관함
           </Link>
-          <span aria-hidden>/</span>
-          <span className="text-body">{currentFolder.name}</span>
+          {trail.map((f, i) => (
+            <span key={f.id} className="flex items-center gap-1.5">
+              <span aria-hidden>/</span>
+              {i === trail.length - 1 ? (
+                <span className="max-w-[40vw] truncate text-body">{f.name}</span>
+              ) : (
+                <Link
+                  href={`/?folderId=${f.id}`}
+                  className="max-w-[24vw] truncate hover:text-body"
+                >
+                  {f.name}
+                </Link>
+              )}
+            </span>
+          ))}
         </nav>
       )}
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-        <h1 className="text-[28px] font-bold tracking-[-0.01em] text-foreground">
+        <h1 className="max-w-full truncate text-[28px] font-bold tracking-[-0.01em] text-foreground">
           {currentFolder ? currentFolder.name : "보관함"}
         </h1>
 
@@ -217,9 +255,10 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               </button>
               <button
                 onClick={deleteFolder}
-                className="block w-full px-3.5 py-2 text-left text-[13px] text-danger hover:bg-[#fdecee]"
+                disabled={deleteFolderM.isPending}
+                className="block w-full px-3.5 py-2 text-left text-[13px] text-danger hover:bg-[#fdecee] disabled:opacity-50"
               >
-                폴더 삭제
+                {deleteFolderM.isPending ? "삭제 중…" : "폴더 삭제"}
               </button>
             </div>
           </details>
@@ -265,10 +304,11 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           <Link
             key={f.id}
             href={`/?folderId=${f.id}`}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-weak-bg px-3.5 py-2 text-[13px] font-medium text-weak-fg transition-transform hover:-translate-y-0.5"
+            title={f.name}
+            className="inline-flex max-w-[200px] items-center gap-1.5 rounded-xl bg-weak-bg px-3.5 py-2 text-[13px] font-medium text-weak-fg transition-transform hover:-translate-y-0.5"
           >
             <span aria-hidden>📁</span>
-            {f.name}
+            <span className="truncate">{f.name}</span>
           </Link>
         ))}
         <button
@@ -385,10 +425,16 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               전체 선택
             </button>
             <div className="ml-auto flex gap-2">
-              <Button variant="ghost" size="md" className="border border-border" onClick={bulkMove}>
+              <Button
+                variant="ghost"
+                size="md"
+                className="border border-border"
+                onClick={bulkMove}
+                loading={bulkM.isPending}
+              >
                 폴더 이동
               </Button>
-              <Button variant="danger" size="md" onClick={bulkDelete}>
+              <Button variant="danger" size="md" onClick={bulkDelete} loading={bulkM.isPending}>
                 삭제
               </Button>
             </div>
