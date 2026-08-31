@@ -2,22 +2,37 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { humanSize } from "@/lib/format";
+import { humanSize, humanDuration } from "@/lib/format";
+import { signGetUrl } from "@/lib/s3";
 import { VideoPlayer } from "@/components/video-player";
 import { VideoActions } from "@/components/video-actions";
 import { SharePanel } from "@/components/share-panel";
 import { MoveToFolder } from "@/components/move-to-folder";
+import { EditableMeta } from "@/components/editable-meta";
 
 export default async function VideoDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireUser();
   const video = await prisma.video.findUnique({ where: { id } });
-  if (!video || video.status !== "ready") notFound();
+  if (!video || video.status !== "ready" || video.deletedAt) notFound();
 
   const canManage = user.role === "admin" || video.uploadedBy === user.email;
-  const folders = canManage
-    ? await prisma.folder.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
-    : [];
+  const [folders, poster] = await Promise.all([
+    canManage
+      ? prisma.folder.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+    video.thumbKey ? signGetUrl(video.thumbKey, { disposition: "inline" }) : Promise.resolve(null),
+  ]);
+
+  const meta = [
+    humanSize(video.sizeBytes == null ? null : Number(video.sizeBytes)),
+    humanDuration(video.durationSec) || null,
+    `조회 ${video.viewCount}`,
+    new Date(video.createdAt).toLocaleDateString("ko-KR"),
+    video.uploadedBy,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <main className="mx-auto max-w-[860px] px-6 py-8 sm:py-10">
@@ -25,24 +40,17 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
         ← 보관함
       </Link>
 
-      <h1 className="mt-3 text-[26px] font-bold leading-[1.35] tracking-[-0.01em] text-foreground">
-        {video.title}
-      </h1>
-      <p className="mt-1.5 text-[13px] text-muted">
-        {humanSize(video.sizeBytes == null ? null : Number(video.sizeBytes))} ·{" "}
-        {new Date(video.createdAt).toLocaleString("ko-KR")}
-        {video.uploadedBy ? ` · ${video.uploadedBy}` : ""}
-      </p>
+      <EditableMeta
+        videoId={video.id}
+        title={video.title}
+        description={video.description}
+        canEdit={canManage}
+      />
+      <p className="mt-1.5 text-[13px] text-muted">{meta}</p>
 
       <div className="mt-5 overflow-hidden rounded-2xl border border-border">
-        <VideoPlayer videoId={video.id} />
+        <VideoPlayer videoId={video.id} poster={poster} />
       </div>
-
-      {video.description && (
-        <p className="mt-5 whitespace-pre-wrap text-[15px] leading-[1.7] text-body">
-          {video.description}
-        </p>
-      )}
 
       <VideoActions videoId={video.id} canManage={canManage} />
 

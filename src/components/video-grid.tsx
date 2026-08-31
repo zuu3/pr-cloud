@@ -3,28 +3,43 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { humanSize } from "@/lib/format";
+import { humanSize, humanDuration } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { useDialog } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 
 type Video = {
   id: string;
   title: string;
   sizeBytes: number | null;
   originalFilename: string;
+  durationSec: number | null;
+  thumbUrl: string | null;
+  viewCount: number;
   createdAt: string;
   folderId: string | null;
 };
 type Folder = { id: string; name: string; parentId: string | null };
 type Page = { videos: Video[]; nextCursor: string | null };
 
+const SORTS = [
+  ["new", "최신순"],
+  ["old", "오래된순"],
+  ["title", "제목순"],
+  ["size", "용량순"],
+] as const;
+
 export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder[] }) {
   const router = useRouter();
   const params = useSearchParams();
+  const dialog = useDialog();
+  const toast = useToast();
   const folderId = params.get("folderId") ?? undefined;
 
   const [videos, setVideos] = useState<Video[]>(initial.videos);
   const [cursor, setCursor] = useState<string | null>(initial.nextCursor);
   const [q, setQ] = useState(params.get("q") ?? "");
+  const [sort, setSort] = useState(params.get("sort") ?? "new");
   const first = useRef(true);
 
   useEffect(() => {
@@ -36,6 +51,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       const sp = new URLSearchParams();
       if (folderId) sp.set("folderId", folderId);
       if (q.trim()) sp.set("q", q.trim());
+      if (sort !== "new") sp.set("sort", sort);
       router.replace(sp.toString() ? `/?${sp}` : "/");
       const res = await fetch(`/api/videos?${sp}`);
       if (res.ok) {
@@ -43,15 +59,16 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         setVideos(page.videos);
         setCursor(page.nextCursor);
       }
-    }, 300);
+    }, 280);
     return () => clearTimeout(t);
-  }, [q, folderId, router]);
+  }, [q, folderId, sort, router]);
 
   async function loadMore() {
     if (!cursor) return;
     const sp = new URLSearchParams();
     if (folderId) sp.set("folderId", folderId);
     if (q.trim()) sp.set("q", q.trim());
+    if (sort !== "new") sp.set("sort", sort);
     sp.set("cursor", cursor);
     const res = await fetch(`/api/videos?${sp}`);
     if (res.ok) {
@@ -65,79 +82,119 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const childFolders = folders.filter((f) => (f.parentId ?? undefined) === folderId);
 
   async function newFolder() {
-    const name = prompt("새 폴더 이름")?.trim();
+    const name = await dialog.prompt({ title: "새 폴더", label: "폴더 이름", confirmText: "만들기" });
     if (!name) return;
     const res = await fetch("/api/folders", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, parentId: folderId }),
     });
-    if (res.ok) router.refresh();
-    else alert((await res.json().catch(() => ({}))).error ?? "폴더를 만들지 못했어요");
+    if (res.ok) {
+      router.refresh();
+      toast.show("폴더를 만들었어요");
+    } else {
+      toast.show((await res.json().catch(() => ({}))).error ?? "폴더를 만들지 못했어요", "err");
+    }
   }
 
   async function renameFolder() {
     if (!currentFolder) return;
-    const name = prompt("폴더 이름 변경", currentFolder.name)?.trim();
+    const name = await dialog.prompt({
+      title: "폴더 이름 변경",
+      label: "새 이름",
+      initial: currentFolder.name,
+    });
     if (!name || name === currentFolder.name) return;
     const res = await fetch(`/api/folders/${currentFolder.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name }),
     });
-    if (res.ok) router.refresh();
-    else alert("이름을 바꾸지 못했어요");
+    if (res.ok) {
+      router.refresh();
+      toast.show("이름을 바꿨어요");
+    } else toast.show("이름을 바꾸지 못했어요", "err");
   }
 
   async function deleteFolder() {
     if (!currentFolder) return;
-    if (!confirm(`'${currentFolder.name}' 폴더를 삭제할까요?`)) return;
+    const ok = await dialog.confirm({
+      title: "폴더를 삭제할까요?",
+      body: `'${currentFolder.name}' 폴더를 삭제해요. 폴더 안이 비어 있어야 해요.`,
+      danger: true,
+      confirmText: "삭제",
+    });
+    if (!ok) return;
     const res = await fetch(`/api/folders/${currentFolder.id}`, { method: "DELETE" });
     if (res.status === 204) {
       router.push(currentFolder.parentId ? `/?folderId=${currentFolder.parentId}` : "/");
       router.refresh();
+      toast.show("폴더를 삭제했어요");
     } else {
-      alert((await res.json().catch(() => ({}))).error ?? "삭제하지 못했어요");
+      toast.show((await res.json().catch(() => ({}))).error ?? "삭제하지 못했어요", "err");
     }
   }
 
   return (
     <main className="mx-auto max-w-[1120px] px-6 py-10 sm:py-12">
-      <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+      {currentFolder && (
+        <nav className="mb-2 flex items-center gap-1.5 text-[13px] text-muted">
+          <Link href="/" className="hover:text-body">
+            보관함
+          </Link>
+          <span aria-hidden>/</span>
+          <span className="text-body">{currentFolder.name}</span>
+        </nav>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
         <h1 className="text-[28px] font-bold tracking-[-0.01em] text-foreground">
           {currentFolder ? currentFolder.name : "보관함"}
         </h1>
-        {folderId && (
-          <Link
-            href={currentFolder?.parentId ? `/?folderId=${currentFolder.parentId}` : "/"}
-            className="pb-1 text-[13px] text-muted hover:text-body"
-          >
-            ← 상위 폴더
-          </Link>
-        )}
+
         {currentFolder && (
-          <div className="flex gap-1 pb-0.5">
-            <button
-              onClick={renameFolder}
-              className="rounded-md px-2 py-1 text-[13px] text-muted hover:bg-surface hover:text-body"
-            >
-              이름 변경
-            </button>
-            <button
-              onClick={deleteFolder}
-              className="rounded-md px-2 py-1 text-[13px] text-danger hover:bg-[#fdecee]"
-            >
-              폴더 삭제
-            </button>
-          </div>
+          <details className="relative [&_summary::-webkit-details-marker]:hidden">
+            <summary className="grid size-8 cursor-pointer list-none place-items-center rounded-lg text-muted hover:bg-surface hover:text-body">
+              ⋯
+            </summary>
+            <div className="absolute left-0 top-9 z-10 w-36 overflow-hidden rounded-xl border border-border bg-canvas py-1 shadow-[0_8px_24px_-8px_rgba(25,31,40,0.2)]">
+              <button
+                onClick={renameFolder}
+                className="block w-full px-3.5 py-2 text-left text-[13px] text-body hover:bg-surface"
+              >
+                이름 변경
+              </button>
+              <button
+                onClick={deleteFolder}
+                className="block w-full px-3.5 py-2 text-left text-[13px] text-danger hover:bg-[#fdecee]"
+              >
+                폴더 삭제
+              </button>
+            </div>
+          </details>
         )}
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="제목으로 검색"
-          aria-label="제목으로 검색"
-          className="ml-auto h-10 w-full max-w-[260px] rounded-xl border border-border bg-surface px-3.5 text-[14px] outline-none transition-colors focus:border-primary focus:bg-canvas"
-        />
+
+        <div className="ml-auto flex items-center gap-2">
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            aria-label="정렬"
+            className="h-10 rounded-xl border border-border bg-surface px-2.5 text-[13px] outline-none focus:border-primary focus:bg-canvas"
+          >
+            {SORTS.map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="제목으로 검색"
+            aria-label="제목으로 검색"
+            className="h-10 w-full max-w-[220px] rounded-xl border border-border bg-surface px-3.5 text-[14px] outline-none transition-colors focus:border-primary focus:bg-canvas"
+          />
+        </div>
       </div>
 
       <div className="mt-5 flex flex-wrap gap-2">
@@ -157,6 +214,12 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         >
           + 새 폴더
         </button>
+        <Link
+          href="/trash"
+          className="ml-auto rounded-xl px-3 py-2 text-[13px] text-muted hover:bg-surface hover:text-body"
+        >
+          휴지통
+        </Link>
       </div>
 
       {videos.length === 0 ? (
@@ -184,13 +247,31 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               href={`/v/${v.id}`}
               className="group overflow-hidden rounded-2xl border border-border bg-canvas transition-all hover:-translate-y-1 hover:border-primary hover:shadow-[0_8px_24px_-12px_rgba(25,31,40,0.15)]"
             >
-              <div className="flex aspect-video items-center justify-center bg-surface text-[32px] text-muted/60">
-                ▶
+              <div className="relative aspect-video bg-surface">
+                {v.thumbUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={v.thumbUrl}
+                    alt=""
+                    className="size-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="grid size-full place-items-center text-[32px] text-muted/50">
+                    ▶
+                  </div>
+                )}
+                {v.durationSec != null && (
+                  <span className="absolute bottom-2 right-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                    {humanDuration(v.durationSec)}
+                  </span>
+                )}
               </div>
               <div className="p-4">
                 <p className="truncate text-[15px] font-semibold text-foreground">{v.title}</p>
                 <p className="mt-1 text-[12px] text-muted">
-                  {humanSize(v.sizeBytes)} · {new Date(v.createdAt).toLocaleDateString("ko-KR")}
+                  {humanSize(v.sizeBytes)} · 조회 {v.viewCount} ·{" "}
+                  {new Date(v.createdAt).toLocaleDateString("ko-KR")}
                 </p>
               </div>
             </Link>

@@ -47,6 +47,13 @@ export function signGetUrl(
   );
 }
 
+/** Presigned GET on the INTERNAL endpoint — for server-side tools (ffmpeg) on the VM. */
+export function signInternalGetUrl(key: string, ttl = 3600) {
+  return getSignedUrl(s3Internal, new GetObjectCommand({ Bucket: BUCKET, Key: key }), {
+    expiresIn: ttl,
+  });
+}
+
 export function signUploadPartUrl(
   key: string,
   uploadId: string,

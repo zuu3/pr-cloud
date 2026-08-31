@@ -15,8 +15,14 @@ export async function GET(request: Request, { params }: Ctx) {
         : "inline";
 
     const video = await prisma.video.findUnique({ where: { id } });
-    if (!video) throw new HttpError(404, "not found");
+    if (!video || video.deletedAt) throw new HttpError(404, "not found");
     if (video.status !== "ready") throw new HttpError(409, "not ready");
+
+    if (disposition === "inline") {
+      prisma.video
+        .update({ where: { id }, data: { viewCount: { increment: 1 } } })
+        .catch(() => {});
+    }
 
     const url = await signGetUrl(video.s3Key, {
       disposition,

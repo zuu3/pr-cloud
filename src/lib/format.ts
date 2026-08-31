@@ -1,3 +1,10 @@
+export function humanDuration(sec: number | null): string {
+  if (sec == null || sec <= 0) return "";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export function humanSize(bytes: number | null): string {
   if (bytes == null) return "—";
   if (bytes === 0) return "0 B";

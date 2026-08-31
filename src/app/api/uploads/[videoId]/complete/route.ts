@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { handle, json, HttpError } from "@/lib/http";
 import { s3Internal, BUCKET } from "@/lib/s3";
 import { logAudit } from "@/lib/audit";
+import { generateMedia } from "@/lib/media";
 
 type Ctx = { params: Promise<{ videoId: string }> };
 
@@ -25,6 +26,7 @@ export async function POST(_request: Request, { params }: Ctx) {
         data: { status: "ready", sizeBytes: BigInt(head.ContentLength ?? 0) },
       });
       await logAudit(user.email, "upload", videoId);
+      void generateMedia(videoId).catch(() => {});
       return json({
         video: { ...updated, sizeBytes: Number(updated.sizeBytes) },
       });

@@ -6,6 +6,7 @@ import { handle, json, HttpError } from "@/lib/http";
 import { assertUploadOwner } from "@/lib/uploads";
 import { s3Internal, BUCKET } from "@/lib/s3";
 import { logAudit } from "@/lib/audit";
+import { generateMedia } from "@/lib/media";
 
 const schema = z.object({
   key: z.string(),
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
       prisma.upload.delete({ where: { videoId } }),
     ]);
     await logAudit(user.email, "upload", videoId);
+    void generateMedia(videoId).catch(() => {});
     return json({ video: { ...updated, sizeBytes: Number(updated.sizeBytes) } });
   });
 }
