@@ -36,6 +36,13 @@ const SORTS = [
   ["old", "오래된순"],
   ["title", "제목순"],
   ["size", "용량순"],
+  ["views", "조회수순"],
+] as const;
+
+const DATE_RANGES = [
+  ["", "전체 기간"],
+  ["7", "최근 7일"],
+  ["30", "최근 30일"],
 ] as const;
 
 export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder[] }) {
@@ -49,6 +56,8 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [cursor, setCursor] = useState<string | null>(initial.nextCursor);
   const [q, setQ] = useState(params.get("q") ?? "");
   const [sort, setSort] = useState(params.get("sort") ?? "new");
+  const [mine, setMine] = useState(params.get("mine") === "1");
+  const [days, setDays] = useState(params.get("days") ?? "");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [selMode, setSelMode] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -92,16 +101,24 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     setSel(new Set());
   }
 
+  function buildParams(extra?: Record<string, string>) {
+    const sp = new URLSearchParams();
+    if (folderId) sp.set("folderId", folderId);
+    if (q.trim()) sp.set("q", q.trim());
+    if (sort !== "new") sp.set("sort", sort);
+    if (mine) sp.set("mine", "1");
+    if (days) sp.set("days", days);
+    for (const [k, v] of Object.entries(extra ?? {})) sp.set(k, v);
+    return sp;
+  }
+
   useEffect(() => {
     if (first.current) {
       first.current = false;
       return;
     }
     const t = setTimeout(async () => {
-      const sp = new URLSearchParams();
-      if (folderId) sp.set("folderId", folderId);
-      if (q.trim()) sp.set("q", q.trim());
-      if (sort !== "new") sp.set("sort", sort);
+      const sp = buildParams();
       router.replace(sp.toString() ? `/?${sp}` : "/");
       const res = await fetch(`/api/videos?${sp}`);
       if (res.ok) {
@@ -112,16 +129,13 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       }
     }, 280);
     return () => clearTimeout(t);
-  }, [q, folderId, sort, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, folderId, sort, mine, days, router]);
 
   async function loadMore() {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
-    const sp = new URLSearchParams();
-    if (folderId) sp.set("folderId", folderId);
-    if (q.trim()) sp.set("q", q.trim());
-    if (sort !== "new") sp.set("sort", sort);
-    sp.set("cursor", cursor);
+    const sp = buildParams({ cursor });
     const res = await fetch(`/api/videos?${sp}`);
     if (res.ok) {
       const page: Page = await res.json();
@@ -344,7 +358,27 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setMine((v) => !v)}
+          className={`h-9 shrink-0 rounded-lg border px-3 text-[13px] font-medium transition-colors ${
+            mine
+              ? "border-primary bg-weak-bg text-weak-fg"
+              : "border-border text-body hover:border-primary"
+          }`}
+        >
+          내가 올린 것
+        </button>
+        <Dropdown
+          ariaLabel="기간"
+          value={days}
+          onChange={setDays}
+          options={DATE_RANGES.map(([v, label]) => ({ value: v, label }))}
+          className="w-[116px] shrink-0"
+        />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
         {childFolders.map((f) => (
           <Link
             key={f.id}

@@ -4,13 +4,14 @@ import { handle, json } from "@/lib/http";
 import { signGetUrl } from "@/lib/s3";
 import type { Prisma } from "@prisma/client";
 
-type SortKey = "new" | "old" | "title" | "size";
+type SortKey = "new" | "old" | "title" | "size" | "views";
 
 const orderBy: Record<SortKey, Prisma.VideoOrderByWithRelationInput[]> = {
   new: [{ createdAt: "desc" }, { id: "desc" }],
   old: [{ createdAt: "asc" }, { id: "asc" }],
   title: [{ title: "asc" }, { id: "asc" }],
   size: [{ sizeBytes: "desc" }, { id: "desc" }],
+  views: [{ viewCount: "desc" }, { id: "desc" }],
 };
 
 export async function GET(request: Request) {
@@ -22,6 +23,8 @@ export async function GET(request: Request) {
     const q = p.get("q")?.trim();
     const cursor = p.get("cursor");
     const sort = (p.get("sort") ?? "new") as SortKey;
+    const mine = p.get("mine") === "1";
+    const days = Number(p.get("days"));
 
     const where: Prisma.VideoWhereInput = trash
       ? { status: "ready", deletedAt: { not: null } }
@@ -33,6 +36,10 @@ export async function GET(request: Request) {
       where.folderId = folderParam ?? null;
     }
     if (q) where.title = { contains: q, mode: "insensitive" };
+    if (!trash && mine) where.uploadedBy = user.email;
+    if (!trash && Number.isFinite(days) && days > 0) {
+      where.createdAt = { gte: new Date(Date.now() - days * 86_400_000) };
+    }
 
     const rows = await prisma.video.findMany({
       where,
