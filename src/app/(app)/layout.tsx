@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { Nav } from "@/components/nav";
 import { Providers } from "@/components/providers";
+import { StorageWarning } from "@/components/storage-warning";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const s = await auth();
@@ -13,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <Providers>
       <Nav user={user} />
+      <StorageWarning />
       {children}
     </Providers>
   );
