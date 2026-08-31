@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FolderMenu } from "@/components/folder-menu";
+import { FolderPicker } from "@/components/folder-picker";
+import { IconFolder, IconFilm, IconPlay, IconCheck } from "@/components/ui/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
@@ -45,6 +47,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [sort, setSort] = useState(params.get("sort") ?? "new");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [selMode, setSelMode] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const first = useRef(true);
 
   const allFolders = useMemo(() => folders, [folders]);
@@ -171,18 +174,9 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     if (ok) bulkM.mutate({ action: "trash", ids: [...sel] });
   }
 
-  async function bulkMove() {
-    const picked = await dialog.prompt({
-      title: "폴더로 이동",
-      label: "옮길 폴더",
-      confirmText: "이동",
-      options: [
-        { value: "", label: "보관함 루트" },
-        ...allFolders.map((f) => ({ value: f.id, label: f.name })),
-      ],
-    });
-    if (picked === null) return;
-    bulkM.mutate({ action: "move", folderId: picked || null, ids: [...sel] });
+  function bulkMoveTo(folderId: string) {
+    setMoveOpen(false);
+    bulkM.mutate({ action: "move", folderId: folderId || null, ids: [...sel] });
   }
 
   async function newFolder() {
@@ -299,7 +293,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             title={f.name}
             className="inline-flex max-w-[200px] items-center gap-1.5 rounded-xl bg-weak-bg px-3.5 py-2 text-[13px] font-medium text-weak-fg transition-transform hover:-translate-y-0.5"
           >
-            <span aria-hidden>📁</span>
+            <IconFolder className="size-4 shrink-0" />
             <span className="truncate">{f.name}</span>
           </Link>
         ))}
@@ -319,8 +313,8 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
 
       {videos.length === 0 ? (
         <div className="mt-20 flex flex-col items-center text-center">
-          <div className="flex size-16 items-center justify-center rounded-2xl bg-surface text-[28px]">
-            🎞️
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-surface text-[26px] text-muted">
+            <IconFilm />
           </div>
           <p className="mt-4 text-[16px] font-semibold text-foreground">
             {q ? "검색 결과가 없어요" : "아직 올린 영상이 없어요"}
@@ -362,7 +356,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                         : "border-white bg-foreground/30 text-transparent"
                     }`}
                   >
-                    ✓
+                    <IconCheck className="size-3.5" />
                   </span>
                 )}
                 <div className="relative aspect-video bg-surface">
@@ -375,8 +369,8 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                       loading="lazy"
                     />
                   ) : (
-                    <div className="grid size-full place-items-center text-[32px] text-muted/50">
-                      ▶
+                    <div className="grid size-full place-items-center text-[28px] text-muted/40">
+                      <IconPlay />
                     </div>
                   )}
                   {v.durationSec != null && (
@@ -421,13 +415,39 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                 variant="ghost"
                 size="md"
                 className="border border-border"
-                onClick={bulkMove}
+                onClick={() => setMoveOpen(true)}
                 loading={bulkM.isPending}
               >
                 폴더 이동
               </Button>
               <Button variant="danger" size="md" onClick={bulkDelete} loading={bulkM.isPending}>
                 삭제
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {moveOpen && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 px-6"
+          onClick={() => setMoveOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal
+            className="w-full max-w-[360px] rounded-2xl bg-canvas p-5 shadow-[0_16px_48px_-12px_rgba(25,31,40,0.3)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[17px] font-bold text-foreground">
+              {sel.size}개 영상을 옮길 폴더
+            </h2>
+            <div className="mt-3">
+              <FolderPicker folders={allFolders} value="" onChange={bulkMoveTo} />
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button variant="ghost" size="md" onClick={() => setMoveOpen(false)}>
+                취소
               </Button>
             </div>
           </div>

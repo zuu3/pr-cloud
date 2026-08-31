@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/components/providers";
 import { useDialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { IconTrash } from "@/components/ui/icons";
 
 type Row = { id: string; title: string; sizeBytes: number | null; createdAt: string };
 
@@ -54,8 +55,8 @@ export function TrashList({ initial }: { initial: Row[] }) {
   if (rows.length === 0) {
     return (
       <div className="mt-20 flex flex-col items-center text-center">
-        <div className="flex size-16 items-center justify-center rounded-2xl bg-surface text-[28px]">
-          🗑️
+        <div className="flex size-16 items-center justify-center rounded-2xl bg-surface text-[26px] text-muted">
+          <IconTrash />
         </div>
         <p className="mt-4 text-[16px] font-semibold text-foreground">휴지통이 비어 있어요</p>
       </div>
