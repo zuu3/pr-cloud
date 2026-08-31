@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { UsersTable } from "./users-table";
+import { AdminPanel } from "./admin-panel";
 
 export default async function AdminPage() {
   await requireAdmin();
@@ -27,6 +28,9 @@ export default async function AdminPage() {
         </Link>
       </div>
       <div className="mt-8">
+        <AdminPanel />
+      </div>
+      <div className="mt-6">
         <UsersTable initial={users} />
       </div>
     </main>
