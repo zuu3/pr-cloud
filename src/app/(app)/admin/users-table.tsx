@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { SCHOOL_DOMAIN, normalizeEmail } from "@/lib/school";
+import { Button } from "@/components/ui/button";
 
 type Row = {
   email: string;
@@ -19,7 +21,7 @@ export function UsersTable({ initial }: { initial: Row[] }) {
     const res = await fetch("/api/admin/users", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email: normalizeEmail(email) }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setErr(data.error ?? "추가하지 못했어요");
@@ -56,58 +58,74 @@ export function UsersTable({ initial }: { initial: Row[] }) {
     <div>
       <div className="flex gap-2">
         <label className="sr-only" htmlFor="email">
-          email
+          이메일 또는 학번
         </label>
         <input
           id="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="h-11 flex-1 rounded-lg border border-border bg-canvas px-3 text-[16px] outline-none focus:border-primary"
-          placeholder="user@school.ac.kr"
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          className="h-11 flex-1 rounded-xl border border-border bg-surface px-3.5 text-[15px] outline-none transition-colors focus:border-primary focus:bg-canvas"
+          placeholder={`24.036  또는  이름@${SCHOOL_DOMAIN}`}
         />
-        <button
-          onClick={add}
-          className="h-11 rounded-lg bg-primary px-4 text-[15px] font-semibold text-white hover:bg-primary-hover"
-        >
+        <Button onClick={add} size="md" className="h-11">
           추가
-        </button>
+        </Button>
       </div>
-      {err && <p className="mt-2 text-[14px] text-danger">{err}</p>}
+      <p className="mt-1.5 text-[12px] text-muted">
+        학번만 입력하면 {`@${SCHOOL_DOMAIN}`}이 자동으로 붙어요.
+      </p>
+      {err && <p className="mt-2 text-[13px] text-danger">{err}</p>}
 
-      <table className="mt-6 w-full text-[14px]">
-        <thead className="text-left text-muted">
-          <tr>
-            <th className="pb-2 font-medium">이메일</th>
-            <th className="pb-2 font-medium">상태</th>
-            <th className="pb-2 font-medium">권한</th>
-            <th className="pb-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.email} className="border-t border-border">
-              <td className="py-2 text-foreground">{r.email}</td>
-              <td className="py-2">{r.status}</td>
-              <td className="py-2">
-                <select
-                  aria-label={`${r.email} 권한`}
-                  value={r.role}
-                  onChange={(e) => setRole(r, e.target.value as "member" | "admin")}
-                  className="rounded-md border border-border bg-canvas px-2 py-1"
-                >
-                  <option value="member">member</option>
-                  <option value="admin">admin</option>
-                </select>
-              </td>
-              <td className="py-2 text-right">
-                <button onClick={() => remove(r)} className="text-danger hover:underline">
-                  삭제
-                </button>
-              </td>
+      <div className="mt-6 overflow-hidden rounded-2xl border border-border">
+        <table className="w-full text-[14px]">
+          <thead>
+            <tr className="bg-surface text-left text-[12px] font-medium text-muted">
+              <th className="px-4 py-2.5">이메일</th>
+              <th className="px-4 py-2.5">상태</th>
+              <th className="px-4 py-2.5">권한</th>
+              <th className="px-4 py-2.5" />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.email} className="border-t border-border">
+                <td className="px-4 py-3 font-medium text-foreground">{r.email}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-[12px] font-medium ${
+                      r.status === "active"
+                        ? "bg-weak-bg text-weak-fg"
+                        : "bg-surface text-muted"
+                    }`}
+                  >
+                    {r.status === "active" ? "활성" : "초대됨"}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <select
+                    aria-label={`${r.email} 권한`}
+                    value={r.role}
+                    onChange={(e) => setRole(r, e.target.value as "member" | "admin")}
+                    className="rounded-lg border border-border bg-canvas px-2 py-1 text-[13px] outline-none focus:border-primary"
+                  >
+                    <option value="member">member</option>
+                    <option value="admin">admin</option>
+                  </select>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => remove(r)}
+                    className="rounded-md px-2 py-1 text-[13px] text-danger hover:bg-[#fdecee]"
+                  >
+                    삭제
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

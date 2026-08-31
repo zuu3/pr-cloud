@@ -3,31 +3,43 @@ import { signOut } from "@/lib/auth";
 
 export function Nav({ user }: { user: { email: string; role: "member" | "admin" } }) {
   return (
-    <header className="border-b border-border bg-canvas">
-      <div className="mx-auto flex max-w-[1120px] items-center gap-6 px-6 py-3 text-[15px]">
-        <Link href="/" className="text-[17px] font-semibold text-foreground">
+    <header className="sticky top-0 z-20 border-b border-border bg-canvas/85 backdrop-blur-sm">
+      <div className="mx-auto flex h-14 max-w-[1120px] items-center gap-1 px-6">
+        <Link
+          href="/"
+          className="mr-4 flex items-center gap-2 text-[16px] font-bold tracking-[-0.01em] text-foreground"
+        >
+          <span className="text-[18px]">🎬</span>
           홍보부 영상
         </Link>
-        <Link href="/upload" className="text-body hover:text-foreground">
-          업로드
-        </Link>
-        {user.role === "admin" && (
-          <Link href="/admin" className="text-body hover:text-foreground">
-            계정관리
-          </Link>
-        )}
-        <span className="ml-auto text-[14px] text-muted">{user.email}</span>
+
+        <NavLink href="/">보관함</NavLink>
+        <NavLink href="/upload">업로드</NavLink>
+        {user.role === "admin" && <NavLink href="/admin">계정관리</NavLink>}
+
+        <span className="ml-auto hidden text-[13px] text-muted sm:inline">{user.email}</span>
         <form
           action={async () => {
             "use server";
             await signOut({ redirectTo: "/login" });
           }}
         >
-          <button className="text-[14px] text-body hover:text-foreground hover:underline">
+          <button className="ml-2 rounded-lg px-2.5 py-1.5 text-[13px] text-muted transition-colors hover:bg-surface hover:text-body">
             로그아웃
           </button>
         </form>
       </div>
     </header>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-lg px-3 py-1.5 text-[14px] font-medium text-body transition-colors hover:bg-surface hover:text-foreground"
+    >
+      {children}
+    </Link>
   );
 }

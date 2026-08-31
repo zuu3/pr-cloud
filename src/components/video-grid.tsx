@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { humanSize } from "@/lib/format";
+import { Button } from "@/components/ui/button";
 
 type Video = {
   id: string;
@@ -63,69 +64,145 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const currentFolder = folders.find((f) => f.id === folderId);
   const childFolders = folders.filter((f) => (f.parentId ?? undefined) === folderId);
 
+  async function newFolder() {
+    const name = prompt("새 폴더 이름")?.trim();
+    if (!name) return;
+    const res = await fetch("/api/folders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, parentId: folderId }),
+    });
+    if (res.ok) router.refresh();
+    else alert((await res.json().catch(() => ({}))).error ?? "폴더를 만들지 못했어요");
+  }
+
+  async function renameFolder() {
+    if (!currentFolder) return;
+    const name = prompt("폴더 이름 변경", currentFolder.name)?.trim();
+    if (!name || name === currentFolder.name) return;
+    const res = await fetch(`/api/folders/${currentFolder.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) router.refresh();
+    else alert("이름을 바꾸지 못했어요");
+  }
+
+  async function deleteFolder() {
+    if (!currentFolder) return;
+    if (!confirm(`'${currentFolder.name}' 폴더를 삭제할까요?`)) return;
+    const res = await fetch(`/api/folders/${currentFolder.id}`, { method: "DELETE" });
+    if (res.status === 204) {
+      router.push(currentFolder.parentId ? `/?folderId=${currentFolder.parentId}` : "/");
+      router.refresh();
+    } else {
+      alert((await res.json().catch(() => ({}))).error ?? "삭제하지 못했어요");
+    }
+  }
+
   return (
-    <main className="mx-auto max-w-[1120px] px-6 py-8">
-      <div className="flex items-center gap-3">
-        <h2 className="text-[24px] font-semibold">
-          {currentFolder ? currentFolder.name : "전체 영상"}
-        </h2>
+    <main className="mx-auto max-w-[1120px] px-6 py-10 sm:py-12">
+      <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+        <h1 className="text-[28px] font-bold tracking-[-0.01em] text-foreground">
+          {currentFolder ? currentFolder.name : "보관함"}
+        </h1>
         {folderId && (
-          <Link href="/" className="text-[14px] text-weak-fg hover:underline">
-            루트로
+          <Link
+            href={currentFolder?.parentId ? `/?folderId=${currentFolder.parentId}` : "/"}
+            className="pb-1 text-[13px] text-muted hover:text-body"
+          >
+            ← 상위 폴더
           </Link>
+        )}
+        {currentFolder && (
+          <div className="flex gap-1 pb-0.5">
+            <button
+              onClick={renameFolder}
+              className="rounded-md px-2 py-1 text-[13px] text-muted hover:bg-surface hover:text-body"
+            >
+              이름 변경
+            </button>
+            <button
+              onClick={deleteFolder}
+              className="rounded-md px-2 py-1 text-[13px] text-danger hover:bg-[#fdecee]"
+            >
+              폴더 삭제
+            </button>
+          </div>
         )}
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="제목 검색"
-          aria-label="제목 검색"
-          className="ml-auto h-10 w-64 rounded-lg border border-border bg-canvas px-3 text-[15px] outline-none focus:border-primary"
+          placeholder="제목으로 검색"
+          aria-label="제목으로 검색"
+          className="ml-auto h-10 w-full max-w-[260px] rounded-xl border border-border bg-surface px-3.5 text-[14px] outline-none transition-colors focus:border-primary focus:bg-canvas"
         />
       </div>
 
-      {childFolders.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {childFolders.map((f) => (
-            <Link
-              key={f.id}
-              href={`/?folderId=${f.id}`}
-              className="rounded-lg bg-weak-bg px-3 py-1.5 text-[14px] text-weak-fg"
-            >
-              {f.name}
-            </Link>
-          ))}
-        </div>
-      )}
+      <div className="mt-5 flex flex-wrap gap-2">
+        {childFolders.map((f) => (
+          <Link
+            key={f.id}
+            href={`/?folderId=${f.id}`}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-weak-bg px-3.5 py-2 text-[13px] font-medium text-weak-fg transition-transform hover:-translate-y-0.5"
+          >
+            <span aria-hidden>📁</span>
+            {f.name}
+          </Link>
+        ))}
+        <button
+          onClick={newFolder}
+          className="rounded-xl border border-dashed border-border px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:border-primary hover:text-primary"
+        >
+          + 새 폴더
+        </button>
+      </div>
 
       {videos.length === 0 ? (
-        <p className="mt-16 text-center text-[15px] text-muted">
-          아직 올린 영상이 없어요. 첫 영상을 올려보세요.
-        </p>
+        <div className="mt-20 flex flex-col items-center text-center">
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-surface text-[28px]">
+            🎞️
+          </div>
+          <p className="mt-4 text-[16px] font-semibold text-foreground">
+            {q ? "검색 결과가 없어요" : "아직 올린 영상이 없어요"}
+          </p>
+          <p className="mt-1 text-[14px] text-muted">
+            {q ? "다른 제목으로 찾아보세요." : "첫 영상을 올려보세요."}
+          </p>
+          {!q && (
+            <Link href="/upload" className="mt-5">
+              <Button size="md">영상 업로드</Button>
+            </Link>
+          )}
+        </div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {videos.map((v) => (
             <Link
               key={v.id}
               href={`/v/${v.id}`}
-              className="rounded-xl border border-border bg-canvas p-4 shadow-sm hover:border-primary"
+              className="group overflow-hidden rounded-2xl border border-border bg-canvas transition-all hover:-translate-y-1 hover:border-primary hover:shadow-[0_8px_24px_-12px_rgba(25,31,40,0.15)]"
             >
-              <p className="truncate text-[16px] font-medium text-foreground">{v.title}</p>
-              <p className="mt-1 text-[13px] text-muted">
-                {humanSize(v.sizeBytes)} · {new Date(v.createdAt).toLocaleDateString("ko-KR")}
-              </p>
+              <div className="flex aspect-video items-center justify-center bg-surface text-[32px] text-muted/60">
+                ▶
+              </div>
+              <div className="p-4">
+                <p className="truncate text-[15px] font-semibold text-foreground">{v.title}</p>
+                <p className="mt-1 text-[12px] text-muted">
+                  {humanSize(v.sizeBytes)} · {new Date(v.createdAt).toLocaleDateString("ko-KR")}
+                </p>
+              </div>
             </Link>
           ))}
         </div>
       )}
 
       {cursor && (
-        <div className="mt-6 text-center">
-          <button
-            onClick={loadMore}
-            className="h-10 rounded-lg border border-border bg-canvas px-4 text-[14px] text-body hover:border-primary"
-          >
+        <div className="mt-8 text-center">
+          <Button variant="ghost" size="md" onClick={loadMore} className="border border-border">
             더 보기
-          </button>
+          </Button>
         </div>
       )}
     </main>
