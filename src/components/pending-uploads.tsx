@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { apiFetch } from "@/components/providers";
@@ -13,7 +12,6 @@ type Row = {
   title: string;
   status: "pending" | "uploading" | "failed";
   createdAt: string;
-  folderId: string | null;
 };
 
 export function PendingUploads() {
@@ -82,12 +80,6 @@ export function PendingUploads() {
                 <span className="shrink-0 text-[12px] text-muted">
                   {r.status === "failed" ? "실패" : "멈춤"}
                 </span>
-                <Link
-                  href={`/upload${r.folderId ? `?folderId=${r.folderId}` : ""}`}
-                  className="shrink-0 rounded-md border border-border bg-canvas px-2 py-1 text-[12px] font-medium text-body hover:border-primary hover:text-primary"
-                >
-                  다시 올리기
-                </Link>
                 <button
                   onClick={() => discard(r)}
                   disabled={del.isPending}

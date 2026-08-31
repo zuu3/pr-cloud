@@ -25,7 +25,7 @@ export default async function TrashPage() {
       <BackLink />
       <h1 className="mt-3 text-[28px] font-bold tracking-[-0.01em] text-foreground">휴지통</h1>
       <p className="mt-2 text-[15px] leading-[1.6] text-body">
-        삭제한 영상은 여기 있어요. 되살리거나 완전히 지울 수 있어요. 30일이 지나면 자동으로 완전히 삭제돼요.
+        삭제한 영상은 여기 있어요. 되살리거나 완전히 지울 수 있어요.
       </p>
       <TrashList
         initial={rows.map((r) => ({
