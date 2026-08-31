@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Uppy from "@uppy/core";
 import AwsS3 from "@uppy/aws-s3";
+import GoldenRetriever from "@uppy/golden-retriever";
 import { makeAdapter } from "@/components/upload-adapter";
 import { useToast } from "@/components/ui/toast";
 
@@ -14,6 +15,7 @@ export type UploadItem = {
   status: "queued" | "uploading" | "done" | "error";
   speed: number | null; // bytes/sec
   etaSec: number | null;
+  videoId: string | null;
 };
 
 type Ctx = {
@@ -55,6 +57,12 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       completeMultipartUpload: a.completeMultipartUpload as never,
       abortMultipartUpload: a.abortMultipartUpload as never,
     });
+    // resume in-progress multipart uploads after a reload / crash. Small files
+    // are cached in IndexedDB; large ones need the same file re-picked, then
+    // resume from listParts.
+    if (typeof window !== "undefined") {
+      u.use(GoldenRetriever, { serviceWorker: false });
+    }
 
     const upsert = (id: string, patch: Partial<UploadItem>) =>
       setItems((list) => list.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -71,8 +79,15 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           status: "queued",
           speed: null,
           etaSec: null,
+          videoId: null,
         },
       ]);
+    });
+
+    u.on("restored", () => {
+      toastRef.current.show(
+        "이어올릴 업로드가 있어요. 같은 파일을 다시 선택하면 멈춘 지점부터 올라가요.",
+      );
     });
 
     u.on("upload-progress", (file, prog) => {
@@ -116,7 +131,13 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           return;
         }
       }
-      upsert(file.id, { status: "done", progress: 100, speed: null, etaSec: null });
+      upsert(file.id, {
+        status: "done",
+        progress: 100,
+        speed: null,
+        etaSec: null,
+        videoId: (file.meta?.videoId as string | undefined) ?? null,
+      });
       toastRef.current.show("업로드가 끝났어요");
     });
 

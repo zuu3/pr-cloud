@@ -33,6 +33,7 @@ export async function POST(request: Request) {
         description: d.description,
         folderId: d.folderId ?? null,
         s3Key: key,
+        sizeBytes: BigInt(d.size),
         contentType: d.contentType,
         originalFilename: d.originalFilename,
         status: "pending",

@@ -6,7 +6,8 @@ export default auth((req) => {
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/s/") ||
-    pathname === "/api/healthz";
+    pathname === "/api/healthz" ||
+    pathname === "/api/cron/sweep";
   if (open) return;
 
   if (!req.auth?.user) {
