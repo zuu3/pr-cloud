@@ -1,3 +1,22 @@
 
 # oh-my-design agent tooling (design source lives in /DESIGN.md)
 .claude/
+
+# deps / build
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# env
+.env
+.env.local
+.env*.local
+
+# test / misc
+coverage/
+playwright-report/
+test-results/
+.DS_Store
