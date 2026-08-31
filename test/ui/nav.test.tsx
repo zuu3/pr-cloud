@@ -2,8 +2,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
-// Nav imports signOut from @/lib/auth (server action); stub it for rendering.
-vi.mock("@/lib/auth", () => ({ signOut: vi.fn() }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+vi.mock("next-auth/react", () => ({ signOut: vi.fn() }));
 
 import { Nav } from "@/components/nav";
 

@@ -10,12 +10,18 @@ export function VideoActions({ videoId, canManage }: { videoId: string; canManag
   const router = useRouter();
   const dialog = useDialog();
   const toast = useToast();
-  const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [trashing, setTrashing] = useState(false);
 
   async function download() {
-    const res = await fetch(`/api/videos/${videoId}/url?disposition=attachment`);
-    if (res.ok) window.location.href = (await res.json()).url;
-    else toast.show("다운로드 링크를 만들지 못했어요", "err");
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/videos/${videoId}/url?disposition=attachment`);
+      if (res.ok) window.location.href = (await res.json()).url;
+      else toast.show("다운로드 링크를 만들지 못했어요", "err");
+    } finally {
+      setTimeout(() => setDownloading(false), 800);
+    }
   }
 
   async function trash() {
@@ -26,22 +32,24 @@ export function VideoActions({ videoId, canManage }: { videoId: string; canManag
       confirmText: "삭제",
     });
     if (!ok) return;
-    setBusy(true);
+    setTrashing(true);
     const res = await fetch(`/api/videos/${videoId}`, { method: "DELETE" });
-    setBusy(false);
     if (res.status === 204) {
       toast.show("휴지통으로 옮겼어요");
       router.push("/");
-    } else toast.show("삭제하지 못했어요", "err");
+    } else {
+      setTrashing(false);
+      toast.show("삭제하지 못했어요", "err");
+    }
   }
 
   return (
     <div className="mt-5 flex gap-2">
-      <Button onClick={download} size="md">
+      <Button onClick={download} size="md" loading={downloading}>
         다운로드
       </Button>
       {canManage && (
-        <Button onClick={trash} variant="danger" size="md" loading={busy}>
+        <Button onClick={trash} variant="danger" size="md" loading={trashing}>
           삭제
         </Button>
       )}
