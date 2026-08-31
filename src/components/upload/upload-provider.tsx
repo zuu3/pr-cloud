@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 import Uppy from "@uppy/core";
 import AwsS3 from "@uppy/aws-s3";
 import { makeAdapter } from "@/components/upload-adapter";
@@ -44,7 +36,11 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   const toastRef = useRef(toast);
   toastRef.current = toast;
 
-  const uppy = useMemo(() => {
+  // Create + wire Uppy exactly once. Not useMemo — React StrictMode (dev)
+  // double-invokes effects, and destroying a memoized instance leaves a dead
+  // Uppy that silently ignores addFile. This instance intentionally lives for
+  // the app's lifetime (the provider sits in the root layout).
+  const [uppy] = useState(() => {
     const a = makeAdapter();
     const u = new Uppy({ autoProceed: true, restrictions: { allowedFileTypes: ["video/*"] } });
     u.use(AwsS3, {
@@ -94,17 +90,21 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       upsert(file.id, { status: "done", progress: 100 });
       toastRef.current.show("업로드가 끝났어요");
     });
-    u.on("upload-error", (file) => {
+    u.on("upload-error", (file, error) => {
+      console.error("[upload] upload-error", file?.name, error);
       if (file) upsert(file.id, { status: "error" });
       toastRef.current.show("업로드에 실패했어요", "err");
+    });
+    u.on("error", (error) => console.error("[upload] uppy error", error));
+    u.on("restriction-failed", (file, error) => {
+      console.warn("[upload] restriction-failed", file?.name, error);
+      toastRef.current.show(`${file?.name ?? "파일"}: ${(error as Error).message}`, "err");
     });
     u.on("file-removed", (file) => {
       if (file) setItems((list) => list.filter((x) => x.id !== file.id));
     });
     return u;
-  }, []);
-
-  useEffect(() => () => uppy.destroy(), [uppy]);
+  });
 
   const addFiles = useCallback(
     (files: File[] | FileList, folderId?: string) => {
@@ -122,6 +122,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
+      // autoProceed can miss a synchronous batch add — kick it explicitly
+      void uppy.upload().catch((e) => console.error("[upload] upload() rejected", e));
     },
     [uppy],
   );
