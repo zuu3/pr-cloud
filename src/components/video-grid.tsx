@@ -30,7 +30,12 @@ type Video = {
   createdAt: string;
   folderId: string | null;
 };
-type Folder = { id: string; name: string; parentId: string | null };
+type Folder = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  coverThumbUrl?: string | null;
+};
 type Page = { videos: Video[]; nextCursor: string | null };
 
 const SORTS = [
@@ -404,25 +409,43 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             href={`/?folderId=${f.id}`}
             title={f.name}
             {...dropProps(f.id)}
-            className={`inline-flex max-w-[200px] items-center gap-1.5 rounded-xl bg-weak-bg px-3.5 py-2 text-[13px] font-medium text-weak-fg transition-all hover:-translate-y-0.5 ${
-              dropTarget === f.id ? "ring-2 ring-primary ring-offset-1" : ""
-            }`}
+            className={`group relative flex h-[88px] w-[148px] shrink-0 flex-col justify-end overflow-hidden rounded-2xl border border-border p-2.5 transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-12px_rgba(25,31,40,0.18)] ${
+              f.coverThumbUrl ? "bg-foreground" : "bg-weak-bg"
+            } ${dropTarget === f.id ? "ring-2 ring-primary ring-offset-1" : ""}`}
           >
-            <IconFolder className="size-4 shrink-0" />
-            <span className="truncate">{f.name}</span>
+            {f.coverThumbUrl && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={f.coverThumbUrl}
+                  alt=""
+                  className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-foreground/80 via-foreground/20 to-transparent" />
+              </>
+            )}
+            <span
+              className={`relative flex items-center gap-1 text-[13px] font-semibold ${
+                f.coverThumbUrl ? "text-white" : "text-weak-fg"
+              }`}
+            >
+              <IconFolder className="size-3.5 shrink-0" />
+              <span className="truncate">{f.name}</span>
+            </span>
           </Link>
         ))}
         {trail.length < MAX_FOLDER_DEPTH && (
           <button
             onClick={newFolder}
-            className="rounded-xl border border-dashed border-border px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:border-primary hover:text-primary"
+            className="flex h-[88px] w-[148px] shrink-0 items-center justify-center rounded-2xl border border-dashed border-border text-[13px] font-medium text-muted transition-colors hover:border-primary hover:text-primary"
           >
             + 새 폴더
           </button>
         )}
         <Link
           href="/trash"
-          className="ml-auto rounded-xl px-3 py-2 text-[13px] text-muted hover:bg-surface hover:text-body"
+          className="ml-auto self-start rounded-xl px-3 py-2 text-[13px] text-muted hover:bg-surface hover:text-body"
         >
           휴지통
         </Link>
