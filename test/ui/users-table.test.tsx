@@ -19,7 +19,7 @@ describe("UsersTable", () => {
       ),
     );
     render(<UsersTable initial={[]} />);
-    fireEvent.change(screen.getByLabelText(/email/i), {
+    fireEvent.change(screen.getByLabelText(/이메일/), {
       target: { value: "x@school.ac.kr" },
     });
     fireEvent.click(screen.getByRole("button", { name: "추가" }));
@@ -35,7 +35,7 @@ describe("UsersTable", () => {
       new Response(JSON.stringify({ error: "already exists" }), { status: 409 }),
     );
     render(<UsersTable initial={[]} />);
-    fireEvent.change(screen.getByLabelText(/email/i), {
+    fireEvent.change(screen.getByLabelText(/이메일/), {
       target: { value: "dup@school.ac.kr" },
     });
     fireEvent.click(screen.getByRole("button", { name: "추가" }));

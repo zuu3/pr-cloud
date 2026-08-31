@@ -10,12 +10,14 @@ export default async function AdminPage() {
   });
 
   return (
-    <main className="mx-auto max-w-[1120px] px-6 py-8">
-      <h2 className="text-[24px] font-semibold">접근 허용 계정</h2>
-      <p className="mb-6 mt-1 text-[14px] text-muted">
+    <main className="mx-auto max-w-[760px] px-6 py-10 sm:py-12">
+      <h1 className="text-[28px] font-bold tracking-[-0.01em] text-foreground">계정 관리</h1>
+      <p className="mt-2 text-[15px] leading-[1.6] text-body">
         여기에 등록된 학교 계정만 로그인할 수 있어요.
       </p>
-      <UsersTable initial={users} />
+      <div className="mt-8">
+        <UsersTable initial={users} />
+      </div>
     </main>
   );
 }

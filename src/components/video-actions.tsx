@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 export function VideoActions({ videoId, canManage }: { videoId: string; canManage: boolean }) {
   const router = useRouter();
@@ -22,21 +23,14 @@ export function VideoActions({ videoId, canManage }: { videoId: string; canManag
   }
 
   return (
-    <div className="mt-4 flex gap-2">
-      <button
-        onClick={download}
-        className="h-10 rounded-lg bg-primary px-4 text-[14px] font-semibold text-white hover:bg-primary-hover"
-      >
+    <div className="mt-5 flex gap-2">
+      <Button onClick={download} size="md">
         다운로드
-      </button>
+      </Button>
       {canManage && (
-        <button
-          onClick={remove}
-          disabled={busy}
-          className="h-10 rounded-lg px-4 text-[14px] text-danger hover:bg-[#fdecee] disabled:opacity-40"
-        >
+        <Button onClick={remove} variant="danger" size="md" loading={busy}>
           영상 삭제
-        </button>
+        </Button>
       )}
     </div>
   );
