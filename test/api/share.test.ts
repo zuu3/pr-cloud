@@ -61,6 +61,19 @@ describe("share links", () => {
     expect(r.headers.get("location")).toContain(m.endpoint);
   });
 
+  it("trashed video -> share link 404", async () => {
+    const v = await readyVideo();
+    const link = await db.prisma.shareLink.create({
+      data: { token: "trashed1trashed1trash12", videoId: v.id },
+    });
+    await db.prisma.video.update({ where: { id: v.id }, data: { deletedAt: new Date() } });
+    const { GET } = await import("@/app/s/[token]/url/route");
+    const r = await GET(req(`/s/${link.token}/url`), {
+      params: Promise.resolve({ token: link.token }),
+    });
+    expect(r.status).toBe(404);
+  });
+
   it("revoked token -> 404", async () => {
     const v = await readyVideo();
     const link = await db.prisma.shareLink.create({

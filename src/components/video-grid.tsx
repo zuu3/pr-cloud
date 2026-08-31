@@ -57,22 +57,28 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     e.dataTransfer.setData("text/video-ids", JSON.stringify(ids));
     e.dataTransfer.effectAllowed = "move";
   }
-  function onFolderDrop(e: React.DragEvent, folderId: string) {
+  function onFolderDrop(e: React.DragEvent, targetId: string) {
     e.preventDefault();
     setDropTarget(null);
+    if (bulkM.isPending) return;
     const raw = e.dataTransfer.getData("text/video-ids");
     if (!raw) return;
-    const ids = JSON.parse(raw) as string[];
-    if (ids.length === 0) return;
-    bulkM.mutate({ action: "move", folderId: folderId || null, ids });
+    let ids: string[] = [];
+    try {
+      ids = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (ids.length === 0 || targetId === (folderId ?? "")) return; // no-op: same folder
+    bulkM.mutate({ action: "move", folderId: targetId || null, ids });
   }
-  const dropProps = (folderId: string) => ({
+  const dropProps = (targetId: string) => ({
     onDragOver: (e: React.DragEvent) => {
       e.preventDefault();
-      setDropTarget(folderId);
+      setDropTarget(targetId);
     },
-    onDragLeave: () => setDropTarget((t) => (t === folderId ? null : t)),
-    onDrop: (e: React.DragEvent) => onFolderDrop(e, folderId),
+    onDragLeave: () => setDropTarget((t) => (t === targetId ? null : t)),
+    onDrop: (e: React.DragEvent) => onFolderDrop(e, targetId),
   });
 
   const allFolders = useMemo(() => folders, [folders]);

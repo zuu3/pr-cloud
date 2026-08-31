@@ -9,10 +9,20 @@ import { logAudit } from "@/lib/audit";
 type Ctx = { params: Promise<{ id: string }> };
 const schema = z.object({ expiresAt: z.string().datetime().optional() });
 
+async function manageableVideo(id: string, user: { email: string; role: string }) {
+  const video = await prisma.video.findUnique({ where: { id } });
+  if (!video || video.deletedAt) throw new HttpError(404, "not found");
+  if (user.role !== "admin" && video.uploadedBy !== user.email) {
+    throw new HttpError(403, "forbidden");
+  }
+  return video;
+}
+
 export async function GET(_request: Request, { params }: Ctx) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     const { id } = await params;
+    await manageableVideo(id, user);
     const rows = await prisma.shareLink.findMany({
       where: { videoId: id, revokedAt: null },
       orderBy: { createdAt: "desc" },
@@ -36,8 +46,7 @@ export async function POST(request: Request, { params }: Ctx) {
     const b = schema.safeParse(await request.json().catch(() => ({})));
     if (!b.success) throw new HttpError(400, "invalid body");
 
-    const video = await prisma.video.findUnique({ where: { id } });
-    if (!video) throw new HttpError(404, "not found");
+    const video = await manageableVideo(id, user);
     if (video.status !== "ready") throw new HttpError(409, "not ready");
 
     const token = nanoid(22);
