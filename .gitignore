@@ -22,3 +22,5 @@ test-results/
 .DS_Store
 .dev-pg/
 test-videos/
+.env*
+!.env.example
