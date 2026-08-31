@@ -24,6 +24,7 @@ type Video = {
   originalFilename: string;
   durationSec: number | null;
   thumbUrl: string | null;
+  playableInBrowser: boolean | null;
   viewCount: number;
   createdAt: string;
   folderId: string | null;
@@ -323,6 +324,9 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             <FolderMenu
               onRename={renameFolder}
               onDelete={deleteFolder}
+              onDownload={() => {
+                if (folderId) window.location.href = `/api/download/zip?folderId=${folderId}`;
+              }}
               deleting={deleteFolderM.isPending}
             />
           )}
@@ -487,6 +491,11 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                       {humanDuration(v.durationSec)}
                     </span>
                   )}
+                  {v.playableInBrowser === false && (
+                    <span className="absolute left-2 top-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                      다운로드 전용
+                    </span>
+                  )}
                 </div>
                 <div className="p-4">
                   <p className="truncate text-[15px] font-semibold text-foreground">{v.title}</p>
@@ -542,6 +551,18 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               {sel.size === videos.length && videos.length > 0 ? "전체 해제" : "전체 선택"}
             </button>
             <div className="ml-auto flex gap-2">
+              <Button
+                variant="ghost"
+                size="md"
+                className="border border-border"
+                onClick={() => {
+                  if (sel.size === 0) return;
+                  window.location.href = `/api/download/zip?ids=${[...sel].join(",")}`;
+                }}
+                disabled={sel.size === 0}
+              >
+                ZIP 다운로드
+              </Button>
               <Button
                 variant="ghost"
                 size="md"
