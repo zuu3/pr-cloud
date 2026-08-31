@@ -2,7 +2,7 @@ import { env } from "./env";
 import { prisma } from "./db";
 import { HttpError } from "./http";
 
-export const PART_SIZE = 67_108_864; // 64 MiB
+export const PART_SIZE = 67_108_864; // 64 MiB — keep < Cloudflare 100MB body cap
 
 export const singlePutMax = () => env.SINGLE_PUT_MAX_BYTES;
 
