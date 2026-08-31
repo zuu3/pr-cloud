@@ -35,14 +35,15 @@ model User {
 }
 
 model Folder {
-  id        String   @id @default(uuid())
-  name      String
-  parentId  String?
-  parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children  Folder[] @relation("FolderTree")
-  createdBy String?
-  createdAt DateTime @default(now())
-  videos    Video[]
+  id         String      @id @default(uuid())
+  name       String
+  parentId   String?
+  parent     Folder?     @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children   Folder[]    @relation("FolderTree")
+  createdBy  String?
+  createdAt  DateTime    @default(now())
+  videos     Video[]
+  shareLinks ShareLink[]
 }
 
 model Video {
@@ -80,8 +81,10 @@ model Upload {
 model ShareLink {
   id        String    @id @default(uuid())
   token     String    @unique
-  videoId   String
-  video     Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId   String?
+  video     Video?    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  folderId  String?
+  folder    Folder?   @relation(fields: [folderId], references: [id], onDelete: Cascade)
   expiresAt DateTime?
   createdBy String?
   createdAt DateTime  @default(now())

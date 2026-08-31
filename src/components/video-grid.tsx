@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FolderMenu } from "@/components/folder-menu";
 import { PendingUploads } from "@/components/pending-uploads";
 import { FolderPicker } from "@/components/folder-picker";
+import { SharePanel } from "@/components/share-panel";
 import { Dropdown } from "@/components/ui/dropdown";
 import { MAX_FOLDER_DEPTH } from "@/lib/folders";
 import { IconFolder, IconFilm, IconPlay, IconCheck } from "@/components/ui/icons";
@@ -62,6 +63,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [selMode, setSelMode] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [dropTarget, setDropTarget] = useState<string | null>(null); // folderId | "" (root)
   const [loadingMore, setLoadingMore] = useState(false);
   const first = useRef(true);
@@ -323,10 +325,11 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           {currentFolder && (
             <FolderMenu
               onRename={renameFolder}
-              onDelete={deleteFolder}
+              onShare={() => setShareOpen(true)}
               onDownload={() => {
                 if (folderId) window.location.href = `/api/download/zip?folderId=${folderId}`;
               }}
+              onDelete={deleteFolder}
               deleting={deleteFolderM.isPending}
             />
           )}
@@ -617,6 +620,38 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             <div className="mt-4 flex justify-end">
               <Button variant="ghost" size="md" onClick={() => setMoveOpen(false)}>
                 취소
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+      {shareOpen && currentFolder && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 px-6"
+          onClick={() => setShareOpen(false)}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal
+            initial={{ opacity: 0, scale: 0.94, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ type: "spring", stiffness: 420, damping: 32 }}
+            className="w-full max-w-[420px] rounded-2xl bg-canvas p-5 shadow-[0_16px_48px_-12px_rgba(25,31,40,0.3)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[17px] font-bold text-foreground">'{currentFolder.name}' 공유</h2>
+            <SharePanel folderId={currentFolder.id} />
+            <div className="mt-4 flex justify-end">
+              <Button variant="ghost" size="md" onClick={() => setShareOpen(false)}>
+                닫기
               </Button>
             </div>
           </motion.div>

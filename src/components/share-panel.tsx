@@ -21,16 +21,18 @@ type Link = {
   createdAt: string;
 };
 
-export function SharePanel({ videoId }: { videoId: string }) {
+export function SharePanel({ videoId, folderId }: { videoId?: string; folderId?: string }) {
   const toast = useToast();
   const qc = useQueryClient();
   const [days, setDays] = useState("0");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const key = ["shares", videoId];
+  const isFolder = folderId != null;
+  const endpoint = isFolder ? `/api/folders/${folderId}/share` : `/api/videos/${videoId}/share`;
+  const key = ["shares", isFolder ? "folder" : "video", folderId ?? videoId];
   const { data } = useQuery<{ links: Link[] }>({
     queryKey: key,
-    queryFn: () => apiFetch(`/api/videos/${videoId}/share`),
+    queryFn: () => apiFetch(endpoint),
   });
   const links = data?.links ?? [];
 
@@ -38,7 +40,7 @@ export function SharePanel({ videoId }: { videoId: string }) {
     mutationFn: () => {
       const n = Number(days);
       const expiresAt = n > 0 ? new Date(Date.now() + n * 86_400_000).toISOString() : undefined;
-      return apiFetch(`/api/videos/${videoId}/share`, {
+      return apiFetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(expiresAt ? { expiresAt } : {}),
@@ -68,7 +70,9 @@ export function SharePanel({ videoId }: { videoId: string }) {
     <div className="mt-5 border-t border-border pt-5">
       <h3 className="text-[15px] font-semibold text-foreground">공유 링크</h3>
       <p className="mt-1 text-[13px] leading-[1.6] text-muted">
-        로그인 없이 볼 수 있는 링크를 만들어요.
+        {isFolder
+          ? "이 폴더의 모든 영상을 로그인 없이 볼 수 있는 링크를 만들어요."
+          : "로그인 없이 볼 수 있는 링크를 만들어요."}
       </p>
 
       <div className="mt-3">
