@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FolderMenu } from "@/components/folder-menu";
 import { FolderPicker } from "@/components/folder-picker";
+import { Dropdown } from "@/components/ui/dropdown";
 import { MAX_FOLDER_DEPTH } from "@/lib/folders";
 import { IconFolder, IconFilm, IconPlay, IconCheck } from "@/components/ui/icons";
 import Link from "next/link";
@@ -234,9 +235,21 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
 
   async function deleteFolder() {
     if (!currentFolder) return;
+    let extra = "";
+    try {
+      const info = await apiFetch(`/api/folders/${currentFolder.id}`);
+      const parts: string[] = [];
+      if (info.subfolderCount > 0) parts.push(`하위 폴더 ${info.subfolderCount}개`);
+      if (info.videoCount > 0) parts.push(`영상 ${info.videoCount}개`);
+      extra = parts.length
+        ? ` ${parts.join(", ")}가 함께 삭제돼요. 영상은 휴지통으로 갑니다.`
+        : "";
+    } catch {
+      /* fall through with no count hint */
+    }
     const ok = await dialog.confirm({
-      title: "폴더를 삭제할까요?",
-      body: `'${currentFolder.name}' 폴더를 삭제해요. 폴더 안이 비어 있어야 해요.`,
+      title: `'${currentFolder.name}' 폴더를 삭제할까요?`,
+      body: `이 폴더를 삭제해요.${extra}`,
       danger: true,
       confirmText: "삭제",
     });
@@ -304,18 +317,13 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               {selMode ? "취소" : "선택"}
             </button>
           )}
-          <select
+          <Dropdown
+            ariaLabel="정렬"
             value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            aria-label="정렬"
-            className="h-10 shrink-0 rounded-xl border border-border bg-surface px-2.5 text-[13px] outline-none focus:border-primary focus:bg-canvas"
-          >
-            {SORTS.map(([v, label]) => (
-              <option key={v} value={v}>
-                {label}
-              </option>
-            ))}
-          </select>
+            onChange={setSort}
+            options={SORTS.map(([v, label]) => ({ value: v, label }))}
+            className="w-[104px] shrink-0"
+          />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
