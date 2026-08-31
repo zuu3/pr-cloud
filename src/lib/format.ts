@@ -1,3 +1,17 @@
+/** rough remaining time, human Korean */
+export function humanEta(sec: number | null): string {
+  if (sec == null || !Number.isFinite(sec) || sec <= 0) return "";
+  if (sec < 60) return `${Math.ceil(sec)}초`;
+  if (sec < 3600) return `${Math.ceil(sec / 60)}분`;
+  return `${Math.floor(sec / 3600)}시간 ${Math.ceil((sec % 3600) / 60)}분`;
+}
+
+/** bytes/sec -> "12.3 MB/s" */
+export function humanSpeed(bps: number | null): string {
+  if (bps == null || bps <= 0) return "";
+  return `${humanSize(bps)}/s`;
+}
+
 export function humanDuration(sec: number | null): string {
   if (sec == null || sec <= 0) return "";
   const m = Math.floor(sec / 60);
