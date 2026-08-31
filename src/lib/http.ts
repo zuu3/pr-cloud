@@ -1,10 +1,21 @@
 export class HttpError extends Error {
+  readonly isHttpError = true;
   constructor(
     public status: number,
     message: string,
   ) {
     super(message);
   }
+}
+
+/** Duck-typed check — survives module-identity splits (e.g. vitest resetModules). */
+export function isHttpError(e: unknown): e is HttpError {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    (e as { isHttpError?: unknown }).isHttpError === true &&
+    typeof (e as { status?: unknown }).status === "number"
+  );
 }
 
 export function json(body: unknown, init?: number | ResponseInit): Response {
@@ -22,7 +33,7 @@ export async function handle(fn: () => Promise<Response>): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
-    if (e instanceof HttpError) return json({ error: e.message }, e.status);
+    if (isHttpError(e)) return json({ error: e.message }, e.status);
     console.error("unhandled route error", e);
     return json({ error: "internal error" }, 500);
   }
