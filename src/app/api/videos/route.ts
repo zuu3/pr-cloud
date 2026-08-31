@@ -54,6 +54,7 @@ export async function GET(request: Request) {
         originalFilename: true,
         durationSec: true,
         thumbKey: true,
+        playableInBrowser: true,
         viewCount: true,
         createdAt: true,
         folderId: true,

@@ -3,24 +3,43 @@ import { promisify } from "node:util";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "./db";
 import { s3Internal, BUCKET, signInternalGetUrl } from "./s3";
+import { extOf } from "./uploads";
 
 const run = promisify(execFile);
 
 const FFMPEG = process.env.FFMPEG_PATH ?? "ffmpeg";
 const FFPROBE = process.env.FFPROBE_PATH ?? "ffprobe";
 
-async function probeDuration(url: string): Promise<number | null> {
+// codecs + containers a <video> element can play across mainstream browsers
+const WEB_VCODECS = new Set(["h264", "vp8", "vp9", "av1"]);
+const WEB_CONTAINERS = new Set(["mp4", "m4v", "webm", "ogv", "ogg", "mov"]);
+
+/** null = couldn't tell (leave the flag unknown) */
+export function isWebPlayable(vcodec: string | null, ext: string): boolean | null {
+  if (!vcodec) return null;
+  return WEB_VCODECS.has(vcodec.toLowerCase()) && WEB_CONTAINERS.has(ext.toLowerCase());
+}
+
+async function probe(
+  url: string,
+): Promise<{ duration: number | null; vcodec: string | null }> {
   try {
     const { stdout } = await run(
       FFPROBE,
-      ["-v", "quiet", "-print_format", "json", "-show_format", url],
-      { timeout: 30_000, maxBuffer: 1 << 20 },
+      ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", url],
+      { timeout: 30_000, maxBuffer: 4 << 20 },
     );
-    const d = JSON.parse(stdout)?.format?.duration;
-    const n = Number(d);
-    return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+    const j = JSON.parse(stdout);
+    const d = Number(j?.format?.duration);
+    const v = (j?.streams ?? []).find(
+      (s: { codec_type?: string }) => s.codec_type === "video",
+    );
+    return {
+      duration: Number.isFinite(d) && d > 0 ? Math.round(d) : null,
+      vcodec: (v?.codec_name as string | undefined) ?? null,
+    };
   } catch {
-    return null;
+    return { duration: null, vcodec: null };
   }
 }
 
@@ -58,7 +77,8 @@ export async function generateMedia(videoId: string): Promise<void> {
     if (!video || video.status !== "ready") return;
 
     const url = await signInternalGetUrl(video.s3Key);
-    const duration = await probeDuration(url);
+    const { duration, vcodec } = await probe(url);
+    const playable = isWebPlayable(vcodec, extOf(video.originalFilename));
     const at = duration ? Math.min(3, Math.max(0, Math.floor(duration / 2))) : 1;
     const poster = await grabPoster(url, at);
 
@@ -75,10 +95,14 @@ export async function generateMedia(videoId: string): Promise<void> {
       );
     }
 
-    if (duration || thumbKey) {
+    if (duration || thumbKey || playable !== null) {
       await prisma.video.update({
         where: { id: videoId },
-        data: { durationSec: duration ?? undefined, thumbKey },
+        data: {
+          durationSec: duration ?? undefined,
+          thumbKey,
+          playableInBrowser: playable ?? undefined,
+        },
       });
     }
   } catch (e) {

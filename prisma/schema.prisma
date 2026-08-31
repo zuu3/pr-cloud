@@ -58,6 +58,7 @@ model Video {
   status           VideoStatus @default(pending)
   durationSec      Int?
   thumbKey         String?
+  playableInBrowser Boolean?
   viewCount        Int         @default(0)
   uploadedBy       String?
   deletedAt        DateTime?

@@ -24,6 +24,7 @@ type Video = {
   originalFilename: string;
   durationSec: number | null;
   thumbUrl: string | null;
+  playableInBrowser: boolean | null;
   viewCount: number;
   createdAt: string;
   folderId: string | null;
@@ -485,6 +486,11 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                   {v.durationSec != null && (
                     <span className="absolute bottom-2 right-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
                       {humanDuration(v.durationSec)}
+                    </span>
+                  )}
+                  {v.playableInBrowser === false && (
+                    <span className="absolute left-2 top-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                      다운로드 전용
                     </span>
                   )}
                 </div>

@@ -48,7 +48,11 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
       <p className="mt-1.5 text-[13px] text-muted">{meta}</p>
 
       <div className="mt-5 overflow-hidden rounded-2xl border border-border">
-        <VideoPlayer videoId={video.id} poster={poster} />
+        <VideoPlayer
+          videoId={video.id}
+          poster={poster}
+          playable={video.playableInBrowser}
+        />
       </div>
 
       <VideoActions videoId={video.id} canManage={canManage} />
