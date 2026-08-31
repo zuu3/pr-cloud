@@ -58,12 +58,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       });
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // DB lookup only on sign-in / explicit update — this callback also runs in
+      // Edge middleware on every request, where Prisma cannot run.
       if (user?.email) token.email = user.email;
-      if (token.email) {
+      if ((user?.email || trigger === "update") && token.email) {
         const u = await prisma.user.findUnique({ where: { email: token.email as string } });
         token.role = u?.role ?? "member";
       }
+      token.role ??= "member";
       return token;
     },
     async session({ session, token }) {
