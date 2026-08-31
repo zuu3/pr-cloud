@@ -42,7 +42,7 @@ export default async function LoginPage({
 
       <div className="relative w-full max-w-[380px] rounded-3xl border border-border bg-canvas p-8 shadow-[0_24px_64px_-24px_rgba(25,31,40,0.25)]">
         <h1 className="text-[26px] font-bold tracking-[-0.01em] text-foreground">홍보부 클라우드</h1>
-        <p className="mt-2 text-[14px] text-muted">촬영본을 모아두는 곳</p>
+        <p className="mt-2 text-[14px] text-muted">촬영본 모아두는 곳. 이제 영상 날리지 말자.</p>
 
         {error && (
           <p className="mt-6 rounded-xl bg-[#fdecee] px-3.5 py-2.5 text-[13px] leading-[1.5] text-danger">
