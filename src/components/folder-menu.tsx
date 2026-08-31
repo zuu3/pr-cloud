@@ -6,10 +6,12 @@ import { AnimatePresence, motion } from "motion/react";
 export function FolderMenu({
   onRename,
   onDelete,
+  onDownload,
   deleting,
 }: {
   onRename: () => void;
   onDelete: () => void;
+  onDownload: () => void;
   deleting: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -59,6 +61,15 @@ export function FolderMenu({
               className="block w-full px-3.5 py-2 text-left text-[13px] text-body hover:bg-surface"
             >
               이름 변경
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onDownload();
+              }}
+              className="block w-full px-3.5 py-2 text-left text-[13px] text-body hover:bg-surface"
+            >
+              ZIP 다운로드
             </button>
             <button
               onClick={() => {

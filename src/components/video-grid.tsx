@@ -324,6 +324,9 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             <FolderMenu
               onRename={renameFolder}
               onDelete={deleteFolder}
+              onDownload={() => {
+                if (folderId) window.location.href = `/api/download/zip?folderId=${folderId}`;
+              }}
               deleting={deleteFolderM.isPending}
             />
           )}
@@ -548,6 +551,18 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               {sel.size === videos.length && videos.length > 0 ? "전체 해제" : "전체 선택"}
             </button>
             <div className="ml-auto flex gap-2">
+              <Button
+                variant="ghost"
+                size="md"
+                className="border border-border"
+                onClick={() => {
+                  if (sel.size === 0) return;
+                  window.location.href = `/api/download/zip?ids=${[...sel].join(",")}`;
+                }}
+                disabled={sel.size === 0}
+              >
+                ZIP 다운로드
+              </Button>
               <Button
                 variant="ghost"
                 size="md"
