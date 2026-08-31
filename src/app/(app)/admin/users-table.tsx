@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SCHOOL_DOMAIN, normalizeEmail } from "@/lib/school";
 
 type Row = {
   email: string;
@@ -19,7 +20,7 @@ export function UsersTable({ initial }: { initial: Row[] }) {
     const res = await fetch("/api/admin/users", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email: normalizeEmail(email) }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setErr(data.error ?? "추가하지 못했어요");
@@ -62,8 +63,9 @@ export function UsersTable({ initial }: { initial: Row[] }) {
           id="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
           className="h-11 flex-1 rounded-lg border border-border bg-canvas px-3 text-[16px] outline-none focus:border-primary"
-          placeholder="user@school.ac.kr"
+          placeholder={`24.036  또는  뭐시기@${SCHOOL_DOMAIN}`}
         />
         <button
           onClick={add}

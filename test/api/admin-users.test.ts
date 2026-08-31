@@ -38,6 +38,14 @@ describe("admin users API", () => {
     expect(audit).toHaveLength(1);
   });
 
+  it("accepts a bare local-part and stores the full school address", async () => {
+    mockSession({ email: "admin@school.ac.kr", role: "admin" });
+    const { POST } = await import("@/app/api/admin/users/route");
+    const r = await POST(req("/api/admin/users", jbody({ email: "24.036" })));
+    expect(r.status).toBe(201);
+    expect((await r.json()).user.email).toBe("24.036@bssm.hs.kr");
+  });
+
   it("duplicate invite is 409", async () => {
     mockSession({ email: "admin@school.ac.kr", role: "admin" });
     const { POST } = await import("@/app/api/admin/users/route");
