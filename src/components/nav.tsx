@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import { signOut } from "@/lib/auth";
+import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 
 export function Nav({ user }: { user: { email: string; role: "member" | "admin" } }) {
   return (
@@ -18,26 +21,26 @@ export function Nav({ user }: { user: { email: string; role: "member" | "admin" 
         {user.role === "admin" && <NavLink href="/admin">계정관리</NavLink>}
 
         <span className="ml-auto hidden text-[13px] text-muted sm:inline">{user.email}</span>
-        <form
-          action={async () => {
-            "use server";
-            await signOut({ redirectTo: "/login" });
-          }}
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="ml-2 rounded-lg px-2.5 py-1.5 text-[13px] text-muted transition-colors hover:bg-surface hover:text-body"
         >
-          <button className="ml-2 rounded-lg px-2.5 py-1.5 text-[13px] text-muted transition-colors hover:bg-surface hover:text-body">
-            로그아웃
-          </button>
-        </form>
+          로그아웃
+        </button>
       </div>
     </header>
   );
 }
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const pathname = usePathname();
+  const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
   return (
     <Link
       href={href}
-      className="rounded-lg px-3 py-1.5 text-[14px] font-medium text-body transition-colors hover:bg-surface hover:text-foreground"
+      className={`rounded-lg px-3 py-1.5 text-[14px] font-medium transition-colors ${
+        active ? "bg-surface text-foreground" : "text-body hover:bg-surface hover:text-foreground"
+      }`}
     >
       {children}
     </Link>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FolderMenu } from "@/components/folder-menu";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
@@ -43,10 +44,15 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [q, setQ] = useState(params.get("q") ?? "");
   const [sort, setSort] = useState(params.get("sort") ?? "new");
   const [sel, setSel] = useState<Set<string>>(new Set());
+  const [selMode, setSelMode] = useState(false);
   const first = useRef(true);
 
-  const selMode = sel.size > 0;
   const allFolders = useMemo(() => folders, [folders]);
+
+  function exitSelect() {
+    setSelMode(false);
+    setSel(new Set());
+  }
 
   useEffect(() => {
     if (first.current) {
@@ -64,7 +70,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         const page: Page = await res.json();
         setVideos(page.videos);
         setCursor(page.nextCursor);
-        setSel(new Set());
+        exitSelect();
       }
     }, 280);
     return () => clearTimeout(t);
@@ -111,7 +117,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       }),
     onSuccess: (data, v) => {
       setVideos((list) => list.filter((x) => !v.ids.includes(x.id)));
-      setSel(new Set());
+      exitSelect();
       toast.show(v.action === "trash" ? `${data.count}개를 삭제했어요` : `${data.count}개를 옮겼어요`);
     },
     onError: (e: Error) => toast.show(e.message, "err"),
@@ -236,38 +242,24 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         </nav>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-        <h1 className="max-w-full truncate text-[28px] font-bold tracking-[-0.01em] text-foreground">
-          {currentFolder ? currentFolder.name : "보관함"}
-        </h1>
-
-        {currentFolder && (
-          <details className="relative [&_summary::-webkit-details-marker]:hidden">
-            <summary className="grid size-8 cursor-pointer list-none place-items-center rounded-lg text-muted hover:bg-surface hover:text-body">
-              ⋯
-            </summary>
-            <div className="absolute left-0 top-9 z-10 w-36 overflow-hidden rounded-xl border border-border bg-canvas py-1 shadow-[0_8px_24px_-8px_rgba(25,31,40,0.2)]">
-              <button
-                onClick={renameFolder}
-                className="block w-full px-3.5 py-2 text-left text-[13px] text-body hover:bg-surface"
-              >
-                이름 변경
-              </button>
-              <button
-                onClick={deleteFolder}
-                disabled={deleteFolderM.isPending}
-                className="block w-full px-3.5 py-2 text-left text-[13px] text-danger hover:bg-[#fdecee] disabled:opacity-50"
-              >
-                {deleteFolderM.isPending ? "삭제 중…" : "폴더 삭제"}
-              </button>
-            </div>
-          </details>
-        )}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
+        <div className="flex min-w-0 max-w-full items-center gap-1">
+          <h1 className="truncate text-[28px] font-bold tracking-[-0.01em] text-foreground">
+            {currentFolder ? currentFolder.name : "보관함"}
+          </h1>
+          {currentFolder && (
+            <FolderMenu
+              onRename={renameFolder}
+              onDelete={deleteFolder}
+              deleting={deleteFolderM.isPending}
+            />
+          )}
+        </div>
 
         <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
           {videos.length > 0 && (
             <button
-              onClick={() => setSel(selMode ? new Set() : new Set([videos[0].id]))}
+              onClick={() => (selMode ? exitSelect() : setSelMode(true))}
               className={`h-10 shrink-0 whitespace-nowrap rounded-xl border px-3 text-[13px] font-medium transition-colors ${
                 selMode
                   ? "border-primary bg-weak-bg text-weak-fg"
