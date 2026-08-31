@@ -12,7 +12,7 @@ export default async function AdminPage() {
   });
 
   return (
-    <main className="mx-auto max-w-[760px] px-6 py-10 sm:py-12">
+    <main className="mx-auto max-w-[760px] px-4 sm:px-6 py-10 sm:py-12">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[28px] font-bold tracking-[-0.01em] text-foreground">계정 관리</h1>

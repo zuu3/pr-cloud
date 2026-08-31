@@ -36,7 +36,7 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
     .join(" · ");
 
   return (
-    <main className="mx-auto max-w-[860px] px-6 py-8 sm:py-10">
+    <main className="mx-auto max-w-[860px] px-4 sm:px-6 py-8 sm:py-10">
       <BackLink />
 
       <EditableMeta

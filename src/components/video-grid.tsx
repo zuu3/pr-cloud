@@ -300,7 +300,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   }
 
   return (
-    <main className="mx-auto max-w-[1120px] px-6 py-10 pb-24 sm:py-12">
+    <main className="mx-auto max-w-[1120px] px-4 sm:px-6 py-10 pb-24 sm:py-12">
       <PendingUploads />
       {currentFolder && (
         <nav className="mb-2 flex flex-wrap items-center gap-1.5 text-[13px] text-muted">
@@ -572,23 +572,25 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           transition={{ type: "spring", stiffness: 420, damping: 36 }}
           className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-canvas/95 backdrop-blur-sm"
         >
-          <div className="mx-auto flex max-w-[1120px] items-center gap-3 px-6 py-3">
-            <span className="text-[14px] font-semibold text-foreground">
-              {sel.size > 0 ? `${sel.size}개 선택` : "영상을 선택하세요"}
-            </span>
-            <button
-              onClick={() =>
-                setSel(
-                  sel.size === videos.length
-                    ? new Set()
-                    : new Set(videos.map((v) => v.id)),
-                )
-              }
-              className="text-[13px] text-muted hover:text-body"
-            >
-              {sel.size === videos.length && videos.length > 0 ? "전체 해제" : "전체 선택"}
-            </button>
-            <div className="ml-auto flex gap-2">
+          <div className="mx-auto flex max-w-[1120px] flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
+            <div className="flex items-center gap-3">
+              <span className="text-[14px] font-semibold text-foreground">
+                {sel.size > 0 ? `${sel.size}개 선택` : "영상을 선택하세요"}
+              </span>
+              <button
+                onClick={() =>
+                  setSel(
+                    sel.size === videos.length
+                      ? new Set()
+                      : new Set(videos.map((v) => v.id)),
+                  )
+                }
+                className="text-[13px] text-muted hover:text-body"
+              >
+                {sel.size === videos.length && videos.length > 0 ? "전체 해제" : "전체 선택"}
+              </button>
+            </div>
+            <div className="flex gap-2 sm:ml-auto [&>button]:flex-1 sm:[&>button]:flex-none">
               <Button
                 variant="ghost"
                 size="md"
@@ -599,7 +601,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                 }}
                 disabled={sel.size === 0}
               >
-                ZIP 다운로드
+                ZIP<span className="hidden sm:inline">&nbsp;다운로드</span>
               </Button>
               <Button
                 variant="ghost"

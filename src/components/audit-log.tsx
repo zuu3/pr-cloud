@@ -131,11 +131,13 @@ export function AuditLog() {
                 <span className="font-normal text-body"> · {e.targetLabel}</span>
               )}
             </p>
-            <div className="mt-1 flex items-center gap-1.5 text-[12px] text-muted">
+            <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-muted">
               <Avatar src={e.actorImage} name={e.actorName ?? e.actorEmail} />
-              <span>{e.actorName ?? e.actorEmail ?? "시스템"}</span>
+              <span className="max-w-[60vw] truncate">
+                {e.actorName ?? e.actorEmail ?? "시스템"}
+              </span>
               <span>·</span>
-              <span>{fmt(e.at)}</span>
+              <span className="shrink-0">{fmt(e.at)}</span>
             </div>
           </li>
         ))}

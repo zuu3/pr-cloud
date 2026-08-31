@@ -128,7 +128,7 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
   }
 
   return (
-    <main className="mx-auto max-w-[760px] px-6 py-10 sm:py-12">
+    <main className="mx-auto max-w-[760px] px-4 sm:px-6 py-10 sm:py-12">
       <h1 className="text-[28px] font-bold tracking-[-0.01em] text-foreground">영상 업로드</h1>
       <p className="mt-2 text-[15px] leading-[1.6] text-body">
         큰 파일도 자동으로 나눠서 올라가고, 중간에 끊겨도 이어서 올라가요.
