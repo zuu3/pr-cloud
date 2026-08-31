@@ -16,6 +16,12 @@ const common = {
     accessKeyId: env.S3_ACCESS_KEY,
     secretAccessKey: env.S3_SECRET_KEY,
   },
+  // AWS SDK v3 (>=3.729) injects x-amz-checksum-* / x-amz-sdk-checksum-algorithm
+  // by default. Ceph RGW verifies presigned signatures differently from AWS S3
+  // and 403s on the extra params. Only add checksums when a command truly needs
+  // them.
+  requestChecksumCalculation: "WHEN_REQUIRED" as const,
+  responseChecksumValidation: "WHEN_REQUIRED" as const,
 };
 
 /** Signs URLs the browser will hit — host must be the external endpoint. */
@@ -28,7 +34,9 @@ export function signPutUrl(key: string, contentType: string, ttl = env.PRESIGN_P
   return getSignedUrl(
     s3External,
     new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType }),
-    { expiresIn: ttl },
+    // This RGW rejects a presigned PUT that carries an unsigned Content-Type
+    // header (browsers/Uppy always send one), so fold it into the signature.
+    { expiresIn: ttl, signableHeaders: new Set(["host", "content-type"]) },
   );
 }
 
