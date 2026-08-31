@@ -63,9 +63,46 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const currentFolder = folders.find((f) => f.id === folderId);
   const childFolders = folders.filter((f) => (f.parentId ?? undefined) === folderId);
 
+  async function newFolder() {
+    const name = prompt("새 폴더 이름")?.trim();
+    if (!name) return;
+    const res = await fetch("/api/folders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, parentId: folderId }),
+    });
+    if (res.ok) router.refresh();
+    else alert((await res.json().catch(() => ({}))).error ?? "폴더를 만들지 못했어요");
+  }
+
+  async function renameFolder() {
+    if (!currentFolder) return;
+    const name = prompt("폴더 이름 변경", currentFolder.name)?.trim();
+    if (!name || name === currentFolder.name) return;
+    const res = await fetch(`/api/folders/${currentFolder.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) router.refresh();
+    else alert("이름을 바꾸지 못했어요");
+  }
+
+  async function deleteFolder() {
+    if (!currentFolder) return;
+    if (!confirm(`'${currentFolder.name}' 폴더를 삭제할까요?`)) return;
+    const res = await fetch(`/api/folders/${currentFolder.id}`, { method: "DELETE" });
+    if (res.status === 204) {
+      router.push(currentFolder.parentId ? `/?folderId=${currentFolder.parentId}` : "/");
+      router.refresh();
+    } else {
+      alert((await res.json().catch(() => ({}))).error ?? "삭제하지 못했어요");
+    }
+  }
+
   return (
     <main className="mx-auto max-w-[1120px] px-6 py-8">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-[24px] font-semibold">
           {currentFolder ? currentFolder.name : "전체 영상"}
         </h2>
@@ -73,6 +110,16 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           <Link href="/" className="text-[14px] text-weak-fg hover:underline">
             루트로
           </Link>
+        )}
+        {currentFolder && (
+          <>
+            <button onClick={renameFolder} className="text-[13px] text-muted hover:text-body">
+              이름변경
+            </button>
+            <button onClick={deleteFolder} className="text-[13px] text-danger hover:underline">
+              폴더삭제
+            </button>
+          </>
         )}
         <input
           value={q}
@@ -83,19 +130,23 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         />
       </div>
 
-      {childFolders.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {childFolders.map((f) => (
-            <Link
-              key={f.id}
-              href={`/?folderId=${f.id}`}
-              className="rounded-lg bg-weak-bg px-3 py-1.5 text-[14px] text-weak-fg"
-            >
-              {f.name}
-            </Link>
-          ))}
-        </div>
-      )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {childFolders.map((f) => (
+          <Link
+            key={f.id}
+            href={`/?folderId=${f.id}`}
+            className="rounded-lg bg-weak-bg px-3 py-1.5 text-[14px] text-weak-fg"
+          >
+            {f.name}
+          </Link>
+        ))}
+        <button
+          onClick={newFolder}
+          className="rounded-lg border border-dashed border-border px-3 py-1.5 text-[14px] text-muted hover:border-primary hover:text-primary"
+        >
+          + 새 폴더
+        </button>
+      </div>
 
       {videos.length === 0 ? (
         <p className="mt-16 text-center text-[15px] text-muted">
