@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconFilm } from "@/components/ui/icons";
 import { signOut } from "next-auth/react";
 
 export function Nav({ user }: { user: { email: string; role: "member" | "admin" } }) {
@@ -13,8 +12,7 @@ export function Nav({ user }: { user: { email: string; role: "member" | "admin" 
           href="/"
           className="mr-2 flex shrink-0 items-center gap-2 text-[16px] font-bold tracking-[-0.01em] text-foreground sm:mr-4"
         >
-          <IconFilm className="size-[18px] text-primary" />
-          홍보부 영상
+          홍보부 클라우드
         </Link>
 
         <NavLink href="/">보관함</NavLink>

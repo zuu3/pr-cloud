@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { resolveShare } from "@/lib/share";
-import { IconFilm, IconUpload } from "@/components/ui/icons";
+import { IconUpload } from "@/components/ui/icons";
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -11,8 +11,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     <div className="min-h-screen bg-surface">
       <header className="border-b border-border bg-canvas">
         <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-6 text-[15px] font-bold text-foreground">
-          <IconFilm className="size-[18px] text-primary" />
-          홍보부 영상
+          홍보부 클라우드
         </div>
       </header>
 
