@@ -30,6 +30,7 @@ model User {
   status    UserStatus @default(invited)
   name      String?
   googleSub String?    @unique
+  image     String?
   createdAt DateTime   @default(now())
 }
 
@@ -37,7 +38,7 @@ model Folder {
   id        String   @id @default(uuid())
   name      String
   parentId  String?
-  parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Restrict)
+  parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children  Folder[] @relation("FolderTree")
   createdBy String?
   createdAt DateTime @default(now())
@@ -47,7 +48,7 @@ model Folder {
 model Video {
   id               String      @id @default(uuid())
   folderId         String?
-  folder           Folder?     @relation(fields: [folderId], references: [id], onDelete: Restrict)
+  folder           Folder?     @relation(fields: [folderId], references: [id], onDelete: SetNull)
   title            String
   description      String?
   s3Key            String      @unique

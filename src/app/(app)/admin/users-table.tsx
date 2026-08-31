@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { SCHOOL_DOMAIN, normalizeEmail } from "@/lib/school";
 import { Button } from "@/components/ui/button";
+import { Dropdown } from "@/components/ui/dropdown";
 import { apiFetch } from "@/components/providers";
 import { useToast } from "@/components/ui/toast";
 import { useDialog } from "@/components/ui/dialog";
@@ -109,10 +110,10 @@ export function UsersTable({ initial }: { initial: Row[] }) {
       </p>
       {err && <p className="mt-2 text-[13px] text-danger">{err}</p>}
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-border">
+      <div className="mt-6 rounded-2xl border border-border">
         <table className="w-full text-[14px]">
           <thead>
-            <tr className="bg-surface text-left text-[12px] font-medium text-muted">
+            <tr className="rounded-t-2xl bg-surface text-left text-[12px] font-medium text-muted [&>th:first-child]:rounded-tl-2xl [&>th:last-child]:rounded-tr-2xl">
               <th className="px-4 py-2.5">이메일</th>
               <th className="px-4 py-2.5">상태</th>
               <th className="px-4 py-2.5">권한</th>
@@ -135,18 +136,19 @@ export function UsersTable({ initial }: { initial: Row[] }) {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <select
-                      aria-label={`${r.email} 권한`}
+                    <Dropdown
+                      ariaLabel={`${r.email} 권한`}
                       value={r.role}
                       disabled={roleM.isPending}
-                      onChange={(e) =>
-                        roleM.mutate({ email: r.email, role: e.target.value as "member" | "admin" })
+                      onChange={(v) =>
+                        roleM.mutate({ email: r.email, role: v as "member" | "admin" })
                       }
-                      className="rounded-lg border border-border bg-canvas px-2 py-1 text-[13px] outline-none focus:border-primary disabled:opacity-50"
-                    >
-                      <option value="member">member</option>
-                      <option value="admin">admin</option>
-                    </select>
+                      options={[
+                        { value: "member", label: "member" },
+                        { value: "admin", label: "admin" },
+                      ]}
+                      className="w-28"
+                    />
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button

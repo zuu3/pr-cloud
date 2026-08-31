@@ -36,10 +36,18 @@ export async function startS3(bucket = "promo-video", port = 0) {
       const q = u.searchParams;
       const m = req.method ?? "GET";
 
+      const CORS = {
+        "access-control-allow-origin": req.headers.origin ?? "*",
+        "access-control-allow-methods": "GET,PUT,POST,DELETE,HEAD,OPTIONS",
+        "access-control-allow-headers": "*",
+        "access-control-expose-headers": "ETag,Content-Range,Accept-Ranges",
+        "access-control-max-age": "3000",
+      };
       const send = (code: number, payload: string | Buffer = "", headers: Record<string, string> = {}) => {
-        res.writeHead(code, headers);
+        res.writeHead(code, { ...CORS, ...headers });
         res.end(payload);
       };
+      if (m === "OPTIONS") return send(204);
       const okXml = (s: string, code = 200, h: Record<string, string> = {}) =>
         send(code, xml(s), { "content-type": "application/xml", ...h });
 

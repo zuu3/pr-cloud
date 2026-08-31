@@ -1,21 +1,24 @@
-import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { folderPath } from "@/lib/folders";
 import { TrashList } from "@/components/trash-list";
 
 export default async function TrashPage() {
   const user = await requireUser();
-  const rows = await prisma.video.findMany({
-    where: {
-      status: "ready",
-      deletedAt: { not: null },
-      ...(user.role === "admin" ? {} : { uploadedBy: user.email }),
-    },
-    orderBy: { deletedAt: "desc" },
-    select: { id: true, title: true, sizeBytes: true, createdAt: true },
-    take: 100,
-  });
+  const [rows, folders] = await Promise.all([
+    prisma.video.findMany({
+      where: {
+        status: "ready",
+        deletedAt: { not: null },
+        ...(user.role === "admin" ? {} : { uploadedBy: user.email }),
+      },
+      orderBy: { deletedAt: "desc" },
+      select: { id: true, title: true, sizeBytes: true, createdAt: true, folderId: true },
+      take: 200,
+    }),
+    prisma.folder.findMany({ select: { id: true, name: true, parentId: true } }),
+  ]);
 
   return (
     <main className="mx-auto max-w-[760px] px-6 py-10 sm:py-12">
@@ -26,9 +29,11 @@ export default async function TrashPage() {
       </p>
       <TrashList
         initial={rows.map((r) => ({
-          ...r,
+          id: r.id,
+          title: r.title,
           sizeBytes: r.sizeBytes == null ? null : Number(r.sizeBytes),
           createdAt: r.createdAt.toISOString(),
+          path: r.folderId ? folderPath(folders, r.folderId) : null,
         }))}
       />
     </main>

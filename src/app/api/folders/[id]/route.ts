@@ -7,6 +7,37 @@ import { logAudit } from "@/lib/audit";
 type Ctx = { params: Promise<{ id: string }> };
 const renameSchema = z.object({ name: z.string().min(1).max(20) });
 
+/** this folder + every descendant folder id */
+async function subtreeIds(rootId: string): Promise<string[]> {
+  const all = await prisma.folder.findMany({ select: { id: true, parentId: true } });
+  const childrenOf = new Map<string, string[]>();
+  for (const f of all) {
+    if (f.parentId) (childrenOf.get(f.parentId) ?? childrenOf.set(f.parentId, []).get(f.parentId)!).push(f.id);
+  }
+  const ids: string[] = [];
+  const stack = [rootId];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    ids.push(cur);
+    stack.push(...(childrenOf.get(cur) ?? []));
+  }
+  return ids;
+}
+
+export async function GET(_request: Request, { params }: Ctx) {
+  return handle(async () => {
+    await requireUser();
+    const { id } = await params;
+    const folder = await prisma.folder.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!folder) throw new HttpError(404, "not found");
+    const ids = await subtreeIds(id);
+    const [videoCount] = await Promise.all([
+      prisma.video.count({ where: { folderId: { in: ids }, deletedAt: null } }),
+    ]);
+    return json({ ...folder, subfolderCount: ids.length - 1, videoCount });
+  });
+}
+
 export async function PATCH(request: Request, { params }: Ctx) {
   return handle(async () => {
     const user = await requireUser();
@@ -31,15 +62,20 @@ export async function DELETE(_request: Request, { params }: Ctx) {
     const { id } = await params;
     const folder = await prisma.folder.findUnique({ where: { id } });
     if (!folder) throw new HttpError(404, "not found");
-    const [childCount, videoCount] = await Promise.all([
-      prisma.folder.count({ where: { parentId: id } }),
-      prisma.video.count({ where: { folderId: id } }),
-    ]);
-    if (childCount > 0 || videoCount > 0) {
-      throw new HttpError(409, "폴더를 비운 뒤 삭제할 수 있어요");
-    }
-    await prisma.folder.delete({ where: { id } });
-    await logAudit(user.email, "folder.delete", id);
-    return new Response(null, { status: 204 });
+
+    const ids = await subtreeIds(id);
+    // trash every live video in the subtree, then drop the folders
+    const trashed = await prisma.video.updateMany({
+      where: { folderId: { in: ids }, deletedAt: null, status: "ready" },
+      data: { deletedAt: new Date() },
+    });
+    await prisma.folder.delete({ where: { id } }); // cascades child folders; videos' folderId -> null
+
+    await logAudit(
+      user.email,
+      "folder.delete",
+      `${id} (folders:${ids.length}, videos:${trashed.count})`,
+    );
+    return json({ deletedFolders: ids.length, trashedVideos: trashed.count });
   });
 }

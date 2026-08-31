@@ -9,7 +9,7 @@ import { useDialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { IconTrash } from "@/components/ui/icons";
 
-type Row = { id: string; title: string; sizeBytes: number | null; createdAt: string };
+type Row = { id: string; title: string; sizeBytes: number | null; createdAt: string; path: string | null };
 
 export function TrashList({ initial }: { initial: Row[] }) {
   const dialog = useDialog();
@@ -93,6 +93,9 @@ export function TrashList({ initial }: { initial: Row[] }) {
           >
             <div className="min-w-0 flex-1">
               <p className="truncate text-[14px] font-medium text-foreground">{r.title}</p>
+              {r.path && (
+                <p className="truncate text-[11px] text-muted">{r.path}</p>
+              )}
               <p className="text-[12px] text-muted">
                 {humanSize(r.sizeBytes)} · {new Date(r.createdAt).toLocaleDateString("ko-KR")}
               </p>

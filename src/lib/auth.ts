@@ -44,6 +44,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email_verified?: boolean;
         sub?: string;
         name?: string;
+        picture?: string;
       };
       if (p.hd !== env.GOOGLE_HD || !p.email || p.email_verified !== true) return false;
       const existing = await prisma.user.findUnique({ where: { email: p.email } });
@@ -54,6 +55,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           status: "active",
           name: p.name ?? existing.name,
           googleSub: p.sub ?? existing.googleSub,
+          image: p.picture ?? existing.image,
         },
       });
       return true;
