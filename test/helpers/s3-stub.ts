@@ -16,7 +16,7 @@ type Store = {
 const md5 = (b: Buffer) => createHash("md5").update(b).digest("hex");
 const xml = (s: string) => `<?xml version="1.0" encoding="UTF-8"?>${s}`;
 
-export async function startS3(bucket = "promo-video") {
+export async function startS3(bucket = "promo-video", port = 0) {
   const store: Store = {
     buckets: new Set([bucket]),
     objects: new Map(),
@@ -144,11 +144,11 @@ export async function startS3(bucket = "promo-video") {
     });
   });
 
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  const port = (server.address() as AddressInfo).port;
+  await new Promise<void>((r) => server.listen(port, "127.0.0.1", r));
+  const boundPort = (server.address() as AddressInfo).port;
 
   return {
-    endpoint: `http://127.0.0.1:${port}`,
+    endpoint: `http://127.0.0.1:${boundPort}`,
     accessKey: "test",
     secretKey: "test",
     bucket,
