@@ -36,4 +36,18 @@ describe("folders API", () => {
     );
     expect(r.status).toBe(400);
   });
+
+  it("rejects folders deeper than MAX_FOLDER_DEPTH", async () => {
+    const { POST } = await import("@/app/api/folders/route");
+    let parentId: string | undefined;
+    // depth 1, 2, 3 ok
+    for (let i = 0; i < 3; i++) {
+      const res = await POST(req("/api/folders", jbody({ name: `L${i}`, parentId })));
+      expect(res.status).toBe(201);
+      parentId = (await res.json()).folder.id;
+    }
+    // depth 4 rejected
+    const deep = await POST(req("/api/folders", jbody({ name: "L4", parentId })));
+    expect(deep.status).toBe(400);
+  });
 });
