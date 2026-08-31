@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
+// purgeExpiredTrash removed with the cron sweep — only reconcileStuckUploads remains.
 import { startTestDb } from "../helpers/pg";
 import { startS3 } from "../helpers/s3-stub";
 
@@ -237,37 +238,5 @@ describe("reconcileStuckUploads", () => {
     expect(r.scanned).toBe(1);
     expect(r.failed).toBe(1);
     expect(await db.prisma.video.count({ where: { status: "failed" } })).toBe(1);
-  });
-});
-
-describe("purgeExpiredTrash", () => {
-  it("hard-deletes trash older than the window, keeps the rest", async () => {
-    const old = await db.prisma.video.create({
-      data: {
-        title: "old-trash",
-        s3Key: `promo-video/oldtrash-${Math.random()}.mp4`,
-        originalFilename: "a.mp4",
-        status: "ready",
-        uploadedBy: "kid@school",
-        deletedAt: ago(31 * 24 * HOUR),
-      },
-    });
-    const recent = await db.prisma.video.create({
-      data: {
-        title: "recent-trash",
-        s3Key: `promo-video/recenttrash-${Math.random()}.mp4`,
-        originalFilename: "a.mp4",
-        status: "ready",
-        uploadedBy: "kid@school",
-        deletedAt: ago(5 * 24 * HOUR),
-      },
-    });
-
-    const { purgeExpiredTrash } = await import("@/lib/reconcile");
-    const r = await purgeExpiredTrash(30);
-
-    expect(r.purged).toBe(1);
-    expect(await db.prisma.video.findUnique({ where: { id: old.id } })).toBeNull();
-    expect(await db.prisma.video.findUnique({ where: { id: recent.id } })).not.toBeNull();
   });
 });

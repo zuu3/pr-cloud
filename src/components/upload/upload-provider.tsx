@@ -15,7 +15,6 @@ export type UploadItem = {
   status: "queued" | "uploading" | "done" | "error";
   speed: number | null; // bytes/sec
   etaSec: number | null;
-  videoId: string | null;
 };
 
 type Ctx = {
@@ -79,7 +78,6 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           status: "queued",
           speed: null,
           etaSec: null,
-          videoId: null,
         },
       ]);
     });
@@ -131,13 +129,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           return;
         }
       }
-      upsert(file.id, {
-        status: "done",
-        progress: 100,
-        speed: null,
-        etaSec: null,
-        videoId: (file.meta?.videoId as string | undefined) ?? null,
-      });
+      upsert(file.id, { status: "done", progress: 100, speed: null, etaSec: null });
       toastRef.current.show("업로드가 끝났어요");
     });
 

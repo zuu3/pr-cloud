@@ -3,7 +3,6 @@ import {
   ListPartsCommand,
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
-  DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 import { prisma } from "./db";
 import { s3Internal, BUCKET } from "./s3";
@@ -147,29 +146,4 @@ async function finishMultipart(v: {
   await logAudit(v.uploadedBy, "upload.recovered", v.id);
   void generateMedia(v.id).catch(() => {});
   return true;
-}
-
-/**
- * Hard-delete videos that have sat in the trash longer than `days`. Runs from
- * the cron sweep. Objects gone from storage, rows gone from the DB.
- */
-export async function purgeExpiredTrash(days = 30): Promise<{ purged: number }> {
-  const cutoff = new Date(Date.now() - days * 86_400_000);
-  const videos = await prisma.video.findMany({ where: { deletedAt: { lt: cutoff } } });
-  if (videos.length === 0) return { purged: 0 };
-
-  const keys = videos.flatMap((v) => [v.s3Key, v.thumbKey].filter(Boolean) as string[]);
-  for (let i = 0; i < keys.length; i += 1000) {
-    await s3Internal
-      .send(
-        new DeleteObjectsCommand({
-          Bucket: BUCKET,
-          Delete: { Objects: keys.slice(i, i + 1000).map((Key) => ({ Key })), Quiet: true },
-        }),
-      )
-      .catch(() => {});
-  }
-  await prisma.video.deleteMany({ where: { id: { in: videos.map((v) => v.id) } } });
-  await logAudit(null, "trash.autopurge", videos.map((v) => v.id).join(","));
-  return { purged: videos.length };
 }

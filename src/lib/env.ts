@@ -18,8 +18,6 @@ const schema = z.object({
   PRESIGN_PART_TTL: z.coerce.number().int().positive().default(3600),
   PRESIGN_GET_TTL: z.coerce.number().int().positive().default(21600),
   SINGLE_PUT_MAX_BYTES: z.coerce.number().int().positive().default(94371840),
-  // shared secret for POST /api/cron/sweep — unset disables the endpoint (503)
-  CRON_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof schema>;
