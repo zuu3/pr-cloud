@@ -30,21 +30,43 @@ export function AdminPanel() {
     onError: (e: Error) => toast.show(e.message, "err"),
   });
 
+  const regen = useMutation({
+    mutationFn: () => apiFetch("/api/admin/regenerate-media", { method: "POST" }),
+    onSuccess: (r: { queued: number }) =>
+      toast.show(
+        r.queued > 0
+          ? `${r.queued}개 영상의 썸네일·재생정보를 다시 만들고 있어요`
+          : "다시 만들 영상이 없어요",
+      ),
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
   const pct = s?.quota ? Math.min(100, Math.round((s.totalBytes / s.quota) * 100)) : null;
 
   return (
     <section className="rounded-2xl border border-border p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[16px] font-bold text-foreground">저장 용량</h2>
-        <Button
-          variant="ghost"
-          size="md"
-          className="border border-border"
-          loading={sweep.isPending}
-          onClick={() => sweep.mutate()}
-        >
-          미완료 업로드 정리
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="ghost"
+            size="md"
+            className="border border-border"
+            loading={regen.isPending}
+            onClick={() => regen.mutate()}
+          >
+            메타데이터 재생성
+          </Button>
+          <Button
+            variant="ghost"
+            size="md"
+            className="border border-border"
+            loading={sweep.isPending}
+            onClick={() => sweep.mutate()}
+          >
+            미완료 업로드 정리
+          </Button>
+        </div>
       </div>
 
       {!s ? (
