@@ -6,7 +6,7 @@
 
 **Architecture:** Next.js(App Router) 단일 앱. 앱 서버는 파일 바이트를 통과시키지 않고 presigned URL만 발급하는 "티켓 발급기". 파일은 브라우저 ↔ RGW 직결. 메타데이터는 Trove PostgreSQL. Docker로 Nova VM 배포.
 
-**Tech Stack:** Next.js 15 · TypeScript · Auth.js v5 (Google) · Prisma + PostgreSQL 15 · `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` · Uppy (`@uppy/core`, `@uppy/react`, `@uppy/dashboard`, `@uppy/aws-s3`) · Tailwind · Vitest (embedded-postgres + in-process S3 stub, no Docker) · Playwright
+**Tech Stack:** Next.js 16 (App Router) · TypeScript · Auth.js v5 (Google) · Prisma 6 (pinned; 7 = breaking driver-adapter rewrite) + PostgreSQL · `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` · Uppy (`@uppy/core`, `@uppy/react`, `@uppy/dashboard`, `@uppy/aws-s3`) · Tailwind · Vitest (embedded-postgres + in-process S3 stub, no Docker) · Playwright
 
 ## Global Constraints
 
