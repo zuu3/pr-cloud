@@ -83,7 +83,13 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       if (!file) return;
       const videoId = file.meta?.videoId as string | undefined;
       if (videoId && !a.shouldUseMultipart({ size: file.size ?? 0 })) {
-        await a.finalizeSingle(videoId).catch(() => {});
+        try {
+          await a.finalizeSingle(videoId);
+        } catch {
+          upsert(file.id, { status: "error" });
+          toastRef.current.show(`${file.name} 마무리에 실패했어요. 다시 시도해 주세요.`, "err");
+          return;
+        }
       }
       upsert(file.id, { status: "done", progress: 100 });
       toastRef.current.show("업로드가 끝났어요");

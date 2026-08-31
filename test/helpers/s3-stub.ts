@@ -56,6 +56,12 @@ export async function startS3(bucket = "promo-video", port = 0) {
             : okXml(`<Error><Code>NoSuchCORSConfiguration</Code></Error>`, 404);
         }
         if (m === "PUT" && q.has("lifecycle")) return send(200);
+        if (m === "POST" && q.has("delete")) {
+          for (const mk of body.toString().matchAll(/<Key>([^<]+)<\/Key>/g)) {
+            store.objects.delete(`${bkt}/${mk[1]}`);
+          }
+          return okXml(`<DeleteResult></DeleteResult>`);
+        }
         if (m === "PUT") {
           store.buckets.add(bkt);
           return send(200);
