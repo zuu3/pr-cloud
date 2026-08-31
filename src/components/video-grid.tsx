@@ -116,16 +116,17 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   }
 
   async function bulkMove() {
-    const options = [{ id: "", name: "보관함 루트" }, ...allFolders];
     const picked = await dialog.prompt({
       title: "폴더로 이동",
-      label: "폴더 이름을 입력하세요 (비우면 루트)",
+      label: "옮길 폴더",
       confirmText: "이동",
+      options: [
+        { value: "", label: "보관함 루트" },
+        ...allFolders.map((f) => ({ value: f.id, label: f.name })),
+      ],
     });
     if (picked === null) return;
-    const target = options.find((f) => f.name === picked.trim());
-    if (picked.trim() && !target) return toast.show("그런 이름의 폴더가 없어요", "err");
-    void bulk("move", target?.id || null);
+    void bulk("move", picked || null);
   }
 
   const currentFolder = folders.find((f) => f.id === folderId);
@@ -224,24 +225,24 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           </details>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
           {videos.length > 0 && (
             <button
               onClick={() => setSel(selMode ? new Set() : new Set([videos[0].id]))}
-              className={`h-10 rounded-xl border px-3 text-[13px] font-medium transition-colors ${
+              className={`h-10 shrink-0 whitespace-nowrap rounded-xl border px-3 text-[13px] font-medium transition-colors ${
                 selMode
                   ? "border-primary bg-weak-bg text-weak-fg"
                   : "border-border text-body hover:border-primary"
               }`}
             >
-              {selMode ? "선택 취소" : "선택"}
+              {selMode ? "취소" : "선택"}
             </button>
           )}
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
             aria-label="정렬"
-            className="h-10 rounded-xl border border-border bg-surface px-2.5 text-[13px] outline-none focus:border-primary focus:bg-canvas"
+            className="h-10 shrink-0 rounded-xl border border-border bg-surface px-2.5 text-[13px] outline-none focus:border-primary focus:bg-canvas"
           >
             {SORTS.map(([v, label]) => (
               <option key={v} value={v}>
@@ -252,9 +253,9 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="제목으로 검색"
+            placeholder="제목 검색"
             aria-label="제목으로 검색"
-            className="h-10 w-full max-w-[220px] rounded-xl border border-border bg-surface px-3.5 text-[14px] outline-none transition-colors focus:border-primary focus:bg-canvas"
+            className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-surface px-3.5 text-[14px] outline-none transition-colors focus:border-primary focus:bg-canvas sm:w-[200px] sm:flex-none"
           />
         </div>
       </div>
