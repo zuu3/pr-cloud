@@ -1,0 +1,35 @@
+import { z } from "zod";
+import { nanoid } from "nanoid";
+import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { env } from "@/lib/env";
+import { handle, json, HttpError } from "@/lib/http";
+import { logAudit } from "@/lib/audit";
+
+type Ctx = { params: Promise<{ id: string }> };
+const schema = z.object({ expiresAt: z.string().datetime().optional() });
+
+export async function POST(request: Request, { params }: Ctx) {
+  return handle(async () => {
+    const user = await requireUser();
+    const { id } = await params;
+    const b = schema.safeParse(await request.json().catch(() => ({})));
+    if (!b.success) throw new HttpError(400, "invalid body");
+
+    const video = await prisma.video.findUnique({ where: { id } });
+    if (!video) throw new HttpError(404, "not found");
+    if (video.status !== "ready") throw new HttpError(409, "not ready");
+
+    const token = nanoid(22);
+    await prisma.shareLink.create({
+      data: {
+        token,
+        videoId: id,
+        createdBy: user.email,
+        expiresAt: b.data.expiresAt ? new Date(b.data.expiresAt) : null,
+      },
+    });
+    await logAudit(user.email, "share.create", id);
+    return json({ token, url: `${env.NEXTAUTH_URL}/s/${token}` }, 201);
+  });
+}
