@@ -18,7 +18,7 @@ async function post(url: string, body: unknown) {
   return data;
 }
 
-export function makeAdapter(getFolderId: () => string | undefined) {
+export function makeAdapter() {
   return {
     shouldUseMultipart: (f: { size?: number | null }) => (f.size ?? 0) > SINGLE_PUT_MAX,
 
@@ -29,7 +29,7 @@ export function makeAdapter(getFolderId: () => string | undefined) {
         originalFilename: f.name,
         contentType: f.type || "application/octet-stream",
         size: f.size ?? 0,
-        folderId: getFolderId(),
+        folderId: (f.meta.folderId as string | undefined) || undefined,
       });
       f.meta.videoId = d.videoId;
       return {
@@ -50,7 +50,7 @@ export function makeAdapter(getFolderId: () => string | undefined) {
         originalFilename: f.name,
         contentType: f.type || "application/octet-stream",
         size: f.size ?? 0,
-        folderId: getFolderId(),
+        folderId: (f.meta.folderId as string | undefined) || undefined,
       });
       f.meta.videoId = d.videoId;
       return { uploadId: d.uploadId as string, key: d.key as string };

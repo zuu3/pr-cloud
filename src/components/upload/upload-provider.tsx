@@ -1,0 +1,126 @@
+"use client";
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import Uppy from "@uppy/core";
+import AwsS3 from "@uppy/aws-s3";
+import { makeAdapter } from "@/components/upload-adapter";
+import { useToast } from "@/components/ui/toast";
+
+export type UploadItem = {
+  id: string;
+  name: string;
+  size: number;
+  progress: number;
+  status: "queued" | "uploading" | "done" | "error";
+};
+
+type Ctx = {
+  items: UploadItem[];
+  addFiles: (files: File[] | FileList, folderId?: string) => void;
+  clearFinished: () => void;
+  activeCount: number;
+};
+
+const UploadCtx = createContext<Ctx | null>(null);
+
+export function useUpload() {
+  const c = useContext(UploadCtx);
+  if (!c) throw new Error("useUpload must be used within <UploadProvider>");
+  return c;
+}
+
+export function UploadProvider({ children }: { children: React.ReactNode }) {
+  const toast = useToast();
+  const [items, setItems] = useState<UploadItem[]>([]);
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+
+  const uppy = useMemo(() => {
+    const a = makeAdapter();
+    const u = new Uppy({ autoProceed: true, restrictions: { allowedFileTypes: ["video/*"] } });
+    u.use(AwsS3, {
+      shouldUseMultipart: (file) => a.shouldUseMultipart(file),
+      getUploadParameters: a.getUploadParameters as never,
+      createMultipartUpload: a.createMultipartUpload as never,
+      signPart: a.signPart as never,
+      listParts: a.listParts as never,
+      completeMultipartUpload: a.completeMultipartUpload as never,
+      abortMultipartUpload: a.abortMultipartUpload as never,
+    });
+
+    const upsert = (id: string, patch: Partial<UploadItem>) =>
+      setItems((list) => list.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+
+    u.on("file-added", (file) =>
+      setItems((list) => [
+        ...list,
+        {
+          id: file.id,
+          name: file.name ?? "video",
+          size: file.size ?? 0,
+          progress: 0,
+          status: "queued",
+        },
+      ]),
+    );
+    u.on("upload-progress", (file, prog) => {
+      if (!file || !prog.bytesTotal) return;
+      upsert(file.id, {
+        status: "uploading",
+        progress: Math.round((prog.bytesUploaded / prog.bytesTotal) * 100),
+      });
+    });
+    u.on("upload-success", async (file) => {
+      if (!file) return;
+      const videoId = file.meta?.videoId as string | undefined;
+      if (videoId && !a.shouldUseMultipart({ size: file.size ?? 0 })) {
+        await a.finalizeSingle(videoId).catch(() => {});
+      }
+      upsert(file.id, { status: "done", progress: 100 });
+      toastRef.current.show("업로드가 끝났어요");
+    });
+    u.on("upload-error", (file) => {
+      if (file) upsert(file.id, { status: "error" });
+      toastRef.current.show("업로드에 실패했어요", "err");
+    });
+    return u;
+  }, []);
+
+  useEffect(() => () => uppy.destroy(), [uppy]);
+
+  const addFiles = useCallback(
+    (files: File[] | FileList, folderId?: string) => {
+      for (const f of Array.from(files)) {
+        try {
+          uppy.addFile({ name: f.name, type: f.type, data: f, meta: { folderId: folderId ?? "" } });
+        } catch {
+          toastRef.current.show(`${f.name}은(는) 영상 파일이 아니에요`, "err");
+        }
+      }
+    },
+    [uppy],
+  );
+
+  const clearFinished = useCallback(
+    () => setItems((list) => list.filter((x) => x.status === "uploading" || x.status === "queued")),
+    [],
+  );
+
+  const activeCount = items.filter(
+    (i) => i.status === "uploading" || i.status === "queued",
+  ).length;
+
+  return (
+    <UploadCtx.Provider value={{ items, addFiles, clearFinished, activeCount }}>
+      {children}
+    </UploadCtx.Provider>
+  );
+}

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "@/components/ui/toast";
 import { DialogProvider } from "@/components/ui/dialog";
+import { UploadProvider } from "@/components/upload/upload-provider";
+import { UploadTray } from "@/components/upload/upload-tray";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [qc] = useState(
@@ -15,7 +17,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={qc}>
       <ToastProvider>
-        <DialogProvider>{children}</DialogProvider>
+        <DialogProvider>
+          <UploadProvider>
+            {children}
+            <UploadTray />
+          </UploadProvider>
+        </DialogProvider>
       </ToastProvider>
     </QueryClientProvider>
   );
