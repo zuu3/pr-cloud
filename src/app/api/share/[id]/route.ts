@@ -16,7 +16,7 @@ export async function DELETE(_request: Request, { params }: Ctx) {
       throw new HttpError(403, "forbidden");
     }
     await prisma.shareLink.update({ where: { id }, data: { revokedAt: new Date() } });
-    await logAudit(user.email, "share.revoke", link.videoId);
+    await logAudit(user.email, "share.revoke", link.videoId ?? link.folderId ?? undefined);
     return new Response(null, { status: 204 });
   });
 }

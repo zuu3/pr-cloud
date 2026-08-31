@@ -5,20 +5,75 @@ import { useSearchParams } from "next/navigation";
 import { FolderPicker } from "@/components/folder-picker";
 import { IconUpload } from "@/components/ui/icons";
 import { useUpload } from "@/components/upload/upload-provider";
+import { useToast } from "@/components/ui/toast";
 import type { FolderNode } from "@/lib/folders";
 
+const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv|mts|m2ts|wmv|flv|mpg|mpeg|3gp|ogv)$/i;
+
 export function Uploader({ folders }: { folders: FolderNode[] }) {
-  const { addFiles } = useUpload();
+  const { addFiles, addFilesWithFolders } = useUpload();
+  const toast = useToast();
   const params = useSearchParams();
   const initial = params.get("folderId") ?? "";
   const [folderId, setFolderId] = useState(
     folders.some((f) => f.id === initial) ? initial : "",
   );
   const [dragging, setDragging] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dirInputRef = useRef<HTMLInputElement>(null);
 
   function take(files: FileList | File[]) {
     addFiles(files, folderId || undefined);
+  }
+
+  async function takeTree(fileList: FileList) {
+    const files = Array.from(fileList).filter(
+      (f) => f.type.startsWith("video/") || VIDEO_EXT.test(f.name),
+    );
+    if (files.length === 0) {
+      toast.show("폴더 안에 영상 파일이 없어요", "err");
+      return;
+    }
+    setPreparing(true);
+    try {
+      const base = folderId || null;
+      const cache = new Map<string, string>(); // dir path -> folderId ("" = root/base)
+      const items: { file: File; folderId: string }[] = [];
+      let clamped = false;
+
+      for (const f of files) {
+        const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+        const parts = rel.split("/");
+        parts.pop(); // drop filename
+        const key = parts.join("/");
+
+        let fid = cache.get(key);
+        if (fid === undefined) {
+          if (parts.length === 0) {
+            fid = base ?? "";
+          } else {
+            const res = await fetch("/api/folders/ensure", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ segments: parts, parentId: base }),
+            });
+            const data: { folderId?: string | null } = await res.json().catch(() => ({}));
+            fid = (res.ok ? data.folderId : base) ?? "";
+            if (parts.length > 3) clamped = true;
+          }
+          cache.set(key, fid);
+        }
+        items.push({ file: f, folderId: fid ?? "" });
+      }
+
+      addFilesWithFolders(items);
+      if (clamped) {
+        toast.show("폴더는 3단계까지만 만들어져요. 더 깊은 영상은 상위 폴더에 담겼어요.");
+      }
+    } finally {
+      setPreparing(false);
+    }
   }
 
   return (
@@ -71,6 +126,27 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
           multiple
           hidden
           onChange={(e) => e.target.files && take(e.target.files)}
+        />
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 text-[13px]">
+        <button
+          type="button"
+          onClick={() => dirInputRef.current?.click()}
+          disabled={preparing}
+          className="font-medium text-primary hover:underline disabled:opacity-50"
+        >
+          {preparing ? "폴더 준비 중…" : "폴더 통째로 올리기"}
+        </button>
+        <span className="text-muted">— SD카드 폴더 구조 그대로 올라가요</span>
+        <input
+          ref={dirInputRef}
+          type="file"
+          hidden
+          multiple
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          {...({ webkitdirectory: "", directory: "" } as any)}
+          onChange={(e) => e.target.files && takeTree(e.target.files)}
         />
       </div>
 

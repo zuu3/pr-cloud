@@ -5,13 +5,15 @@ import { AnimatePresence, motion } from "motion/react";
 
 export function FolderMenu({
   onRename,
-  onDelete,
+  onShare,
   onDownload,
+  onDelete,
   deleting,
 }: {
   onRename: () => void;
-  onDelete: () => void;
+  onShare: () => void;
   onDownload: () => void;
+  onDelete: () => void;
   deleting: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -61,6 +63,15 @@ export function FolderMenu({
               className="block w-full px-3.5 py-2 text-left text-[13px] text-body hover:bg-surface"
             >
               이름 변경
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onShare();
+              }}
+              className="block w-full px-3.5 py-2 text-left text-[13px] text-body hover:bg-surface"
+            >
+              공유 링크
             </button>
             <button
               onClick={() => {

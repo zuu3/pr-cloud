@@ -20,6 +20,7 @@ export type UploadItem = {
 type Ctx = {
   items: UploadItem[];
   addFiles: (files: File[] | FileList, folderId?: string) => void;
+  addFilesWithFolders: (items: { file: File; folderId: string }[]) => void;
   removeItem: (id: string) => void;
   retryItem: (id: string) => void;
   clearFinished: () => void;
@@ -151,24 +152,36 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     return u;
   });
 
+  const addOne = (f: File, folderId: string) => {
+    try {
+      uppy.addFile({ name: f.name, type: f.type, data: f, meta: { folderId } });
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? "");
+      if (/already added|noDuplicates/i.test(msg)) {
+        toastRef.current.show(`${f.name}은(는) 이미 목록에 있어요`, "err");
+      } else if (/allowedFileTypes|not an allowed/i.test(msg)) {
+        toastRef.current.show(`${f.name}은(는) 영상 파일이 아니에요`, "err");
+      } else {
+        toastRef.current.show(`${f.name}을(를) 추가하지 못했어요`, "err");
+      }
+    }
+  };
+
   const addFiles = useCallback(
     (files: File[] | FileList, folderId?: string) => {
-      for (const f of Array.from(files)) {
-        try {
-          uppy.addFile({ name: f.name, type: f.type, data: f, meta: { folderId: folderId ?? "" } });
-        } catch (e) {
-          const msg = String((e as Error)?.message ?? "");
-          if (/already added|noDuplicates/i.test(msg)) {
-            toastRef.current.show(`${f.name}은(는) 이미 목록에 있어요`, "err");
-          } else if (/allowedFileTypes|not an allowed/i.test(msg)) {
-            toastRef.current.show(`${f.name}은(는) 영상 파일이 아니에요`, "err");
-          } else {
-            toastRef.current.show(`${f.name}을(를) 추가하지 못했어요`, "err");
-          }
-        }
-      }
+      for (const f of Array.from(files)) addOne(f, folderId ?? "");
       void uppy.upload().catch((e) => console.error("[upload] upload() rejected", e));
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [uppy],
+  );
+
+  const addFilesWithFolders = useCallback(
+    (list: { file: File; folderId: string }[]) => {
+      for (const it of list) addOne(it.file, it.folderId);
+      void uppy.upload().catch((e) => console.error("[upload] upload() rejected", e));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [uppy],
   );
 
@@ -215,7 +228,15 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <UploadCtx.Provider
-      value={{ items, addFiles, removeItem, retryItem, clearFinished, activeCount }}
+      value={{
+        items,
+        addFiles,
+        addFilesWithFolders,
+        removeItem,
+        retryItem,
+        clearFinished,
+        activeCount,
+      }}
     >
       {children}
     </UploadCtx.Provider>
