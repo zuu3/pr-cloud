@@ -78,12 +78,13 @@ export function makeAdapter() {
       }));
     },
     completeMultipartUpload: async (
-      _f: unknown,
+      f: { size?: number | null },
       o: { uploadId: string; key: string; parts: { PartNumber?: number; ETag?: string }[] },
     ) => {
       await post("/api/uploads/complete", {
         key: o.key,
         uploadId: o.uploadId,
+        size: f?.size ?? undefined,
         parts: o.parts.map((p) => ({ partNumber: p.PartNumber, etag: p.ETag })),
       });
       return {};

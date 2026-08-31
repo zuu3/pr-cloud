@@ -48,11 +48,14 @@ describe("upload adapter", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ video: {} }), { status: 200 }));
     const a = makeAdapter();
-    await a.completeMultipartUpload(null, {
-      uploadId: "u1",
-      key: "k1",
-      parts: [{ PartNumber: 2, ETag: '"b"' }, { PartNumber: 1, ETag: '"a"' }],
-    });
+    await a.completeMultipartUpload(
+      { size: 123 },
+      {
+        uploadId: "u1",
+        key: "k1",
+        parts: [{ PartNumber: 2, ETag: '"b"' }, { PartNumber: 1, ETag: '"a"' }],
+      },
+    );
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(body.parts).toEqual([
       { partNumber: 2, etag: '"b"' },
