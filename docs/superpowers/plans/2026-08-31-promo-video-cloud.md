@@ -6,13 +6,13 @@
 
 **Architecture:** Next.js(App Router) 단일 앱. 앱 서버는 파일 바이트를 통과시키지 않고 presigned URL만 발급하는 "티켓 발급기". 파일은 브라우저 ↔ RGW 직결. 메타데이터는 Trove PostgreSQL. Docker로 Nova VM 배포.
 
-**Tech Stack:** Next.js 15 · TypeScript · Auth.js v5 (Google) · Prisma + PostgreSQL 15 · `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` · Uppy (`@uppy/core`, `@uppy/react`, `@uppy/dashboard`, `@uppy/aws-s3`) · Tailwind · Vitest (PGlite + in-process S3 stub, no Docker) · Playwright
+**Tech Stack:** Next.js 15 · TypeScript · Auth.js v5 (Google) · Prisma + PostgreSQL 15 · `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` · Uppy (`@uppy/core`, `@uppy/react`, `@uppy/dashboard`, `@uppy/aws-s3`) · Tailwind · Vitest (embedded-postgres + in-process S3 stub, no Docker) · Playwright
 
 ## Global Constraints
 
 - Node >= 20. `package.json` `"engines": { "node": ">=20" }`.
 - Next.js `output: "standalone"`.
-- **테스트는 로컬 Docker를 쓰지 않는다.** `npm test` = 100% 인프로세스: DB는 PGlite(`@electric-sql/pglite` + `@prisma/adapter-pglite`, Prisma `previewFeatures=["driverAdapters"]`), S3는 `node:http` 인메모리 더블(`test/helpers/s3-stub.ts`). e2e(Playwright)만 실제 Postgres 필요 → CI 전용(GitHub Actions `services: postgres`), 로컬 실행은 선택.
+- **테스트는 로컬 Docker를 쓰지 않는다.** DB는 `embedded-postgres`(실제 Postgres 바이너리를 Docker 없이 랜덤 포트로 구동, Prisma 표준 `DATABASE_URL` 호환 — driver adapter/previewFeature 불필요). S3는 `node:http` 인메모리 더블(`test/helpers/s3-stub.ts`). e2e도 동일 스택으로 로컬 실행 가능(cross-process), CI에서도 서비스 컨테이너 없이 동작.
 - `Dockerfile`/`docker-compose.yml` 은 **배포 전용** (Nova VM). 로컬 테스트와 무관.
 - 앱 서버는 영상 바이트를 프록시하지 않는다. 모든 파일 전송은 presigned URL로 브라우저↔RGW 직결. (프록시 폴백은 별도 계획, 이 계획 범위 밖.)
 - S3 클라이언트 2개 분리: `s3External`(host `S3_ENDPOINT_EXTERNAL`, presigned URL 서명 전용) / `s3Internal`(host `S3_ENDPOINT_INTERNAL`, 서버측 Head/List/Complete/Abort/CreateMultipartUpload 호출).
@@ -56,7 +56,7 @@
 | `src/app/(app)/**` | 로그인 필요 페이지 (shell, list, upload, detail, admin). |
 | `src/app/login/page.tsx` | 로그인. |
 | `src/app/s/[token]/page.tsx` + `src/app/s/[token]/url/route.ts` | 공유 페이지 + presigned redirect. |
-| `test/helpers/pg.ts` | PGlite 인프로세스 Postgres + 마이그레이션 SQL 적용. `startTestDb()`. |
+| `test/helpers/pg.ts` | embedded-postgres 구동 + `prisma migrate deploy` 적용. `startTestDb()`. |
 | `test/helpers/s3-stub.ts` | `node:http` 인메모리 S3 더블. `startS3()` (기존 `startMinio` 대체 — import 이름만 교체). |
 | `test/helpers/req.ts` | route handler 호출용 `Request` 빌더 + mock 세션. |
 | `DESIGN.md` | OMD 생성 (Task 0). UI 작업의 디자인 소스. |
@@ -135,11 +135,10 @@ Then edit `package.json`: add `"engines": { "node": ">=20 <21" }`, add scripts:
 - [ ] **Step 2: Add deps**
 
 ```bash
-npm i @aws-sdk/client-s3 @aws-sdk/s3-request-presigner next-auth@beta @auth/prisma-adapter @prisma/client @prisma/adapter-pglite @electric-sql/pglite zod nanoid
-npm i -D vitest @vitejs/plugin-react vite-tsconfig-paths prisma tsx @playwright/test @testing-library/react @testing-library/dom jsdom
+npm i @aws-sdk/client-s3 @aws-sdk/s3-request-presigner next-auth@beta @auth/prisma-adapter @prisma/client zod nanoid
+npm i -D vitest @vitejs/plugin-react vite-tsconfig-paths prisma tsx embedded-postgres pg @playwright/test @testing-library/react @testing-library/dom jsdom
 ```
 
-`prisma/schema.prisma` generator 에 `previewFeatures = ["driverAdapters"]` 추가 (Task 2에서 스키마 작성 시 포함).
 `package.json` `"engines": { "node": ">=20" }`.
 
 - [ ] **Step 3: `next.config.ts` + `vitest.config.ts`**
@@ -285,13 +284,13 @@ git commit -m "chore: scaffold Next.js app + env validation"
 **Interfaces:**
 - Consumes: `env.DATABASE_URL` from Task 1.
 - Produces: `src/lib/db.ts` → `export const prisma: PrismaClient`.
-- Produces: `test/helpers/pg.ts` → `export async function startTestDb(): Promise<{ prisma: PrismaClient; url: string; stop: () => Promise<void> }>` (PGlite 인프로세스 Postgres, 마이그레이션 SQL 파일 순차 적용 완료 상태로 반환).
+- Produces: `test/helpers/pg.ts` → `export async function startTestDb(): Promise<{ prisma: PrismaClient; url: string; stop: () => Promise<void> }>` (embedded-postgres 실제 Postgres, `prisma migrate deploy` 적용 완료 상태로 반환).
 - Produces (models): `User { email PK, role, status, name?, googleSub?, createdAt }`, `Folder { id, name, parentId?, createdBy?, createdAt }`, `Video { id, folderId?, title, description?, s3Key unique, sizeBytes?, contentType?, originalFilename, status, durationSec?, thumbKey?, uploadedBy?, createdAt, updatedAt }`, `Upload { videoId PK, s3UploadId, partSize, partsJson Json, createdAt }`, `ShareLink { id, token unique, videoId, expiresAt?, createdBy?, createdAt, revokedAt? }`, `AuditLog { id BigInt autoincrement, actorEmail?, action, targetId?, at }`.
 
 - [ ] **Step 1: Write `prisma/schema.prisma`**
 
 ```prisma
-generator client { provider = "prisma-client-js"; previewFeatures = ["driverAdapters"] }
+generator client { provider = "prisma-client-js" }
 datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
 
 enum Role { member admin }
@@ -386,36 +385,44 @@ export const prisma = g.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") g.prisma = prisma;
 ```
 
-- [ ] **Step 4: `test/helpers/pg.ts`** (PGlite, no Docker)
+- [ ] **Step 4: `test/helpers/pg.ts`** (embedded-postgres, no Docker)
 
 ```ts
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PGlite } from "@electric-sql/pglite";
-import { PrismaPGlite } from "@prisma/adapter-pglite";
+import EmbeddedPostgres from "embedded-postgres";
 import { PrismaClient } from "@prisma/client";
 
-const MIGRATIONS_DIR = join(process.cwd(), "prisma", "migrations");
+let portSeq = 55000 + Math.floor(Math.random() * 5000);
 
 export async function startTestDb() {
-  const pg = new PGlite(); // in-memory, per-call isolated
-  const dirs = readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => d.name)
-    .sort();
-  for (const d of dirs) {
-    const sql = readFileSync(join(MIGRATIONS_DIR, d, "migration.sql"), "utf8");
-    await pg.exec(sql);
-  }
-  const prisma = new PrismaClient({ adapter: new PrismaPGlite(pg) });
+  const dataDir = mkdtempSync(join(tmpdir(), "promo-pg-"));
+  const port = portSeq++;
+  const pg = new EmbeddedPostgres({
+    databaseDir: dataDir, port, user: "promo", password: "promo",
+    persistent: false, // wiped on stop
+  });
+  await pg.initialise();
+  await pg.start();
+  await pg.createDatabase("promovideo");
+  const url = `postgresql://promo:promo@localhost:${port}/promovideo`;
+
+  execFileSync("npx", ["prisma", "migrate", "deploy"], {
+    env: { ...process.env, DATABASE_URL: url }, stdio: "inherit",
+  });
+
+  const prisma = new PrismaClient({ datasources: { db: { url } } });
   return {
     prisma,
-    stop: async () => { await prisma.$disconnect(); await pg.close(); },
+    url,
+    stop: async () => { await prisma.$disconnect(); await pg.stop(); },
   };
 }
 ```
 
-Note: integration tests call `startTestDb()` and `vi.doMock("../../src/lib/db", () => ({ prisma: db.prisma }))` — unchanged. `db.url` 반환 없음(테스트에서 미사용).
+Note: 통합 테스트는 `startTestDb()` 호출 후 `vi.doMock("../../src/lib/db", () => ({ prisma: db.prisma }))` — 변경 없음. embedded-postgres 첫 실행 시 postgres 바이너리를 1회 다운로드/캐시(수십 MB). `beforeAll` 에서 한 번 기동해 파일 내 테스트가 공유하고, 각 `beforeEach` 에서 필요한 테이블만 `deleteMany` 로 정리(현행 계획대로).
 
 - [ ] **Step 5: Write the failing test**
 
