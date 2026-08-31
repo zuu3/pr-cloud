@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { FolderPicker } from "@/components/folder-picker";
 import { IconUpload } from "@/components/ui/icons";
 import { useUpload } from "@/components/upload/upload-provider";
@@ -8,7 +9,11 @@ import type { FolderNode } from "@/lib/folders";
 
 export function Uploader({ folders }: { folders: FolderNode[] }) {
   const { addFiles } = useUpload();
-  const [folderId, setFolderId] = useState("");
+  const params = useSearchParams();
+  const initial = params.get("folderId") ?? "";
+  const [folderId, setFolderId] = useState(
+    folders.some((f) => f.id === initial) ? initial : "",
+  );
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
