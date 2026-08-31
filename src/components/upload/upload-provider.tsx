@@ -48,6 +48,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     const u = new Uppy({ autoProceed: true, restrictions: { allowedFileTypes: ["video/*"] } });
     u.use(AwsS3, {
       shouldUseMultipart: (file) => a.shouldUseMultipart(file),
+      // upload up to 10 parts in parallel (default 6) — fills a fast LAN link
+      limit: 10,
       // more attempts, longer backoff — a flaky network shouldn't lose the upload
       retryDelays: [0, 1000, 3000, 5000, 10_000, 20_000, 30_000],
       getUploadParameters: a.getUploadParameters as never,
@@ -132,6 +134,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       }
       upsert(file.id, { status: "done", progress: 100, speed: null, etaSec: null });
       toastRef.current.show("업로드가 끝났어요");
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("upload:done"));
     });
 
     u.on("upload-error", (file, error) => {
