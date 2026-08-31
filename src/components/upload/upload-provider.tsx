@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Uppy from "@uppy/core";
 import AwsS3 from "@uppy/aws-s3";
 import { makeAdapter } from "@/components/upload-adapter";
@@ -12,12 +12,15 @@ export type UploadItem = {
   size: number;
   progress: number;
   status: "queued" | "uploading" | "done" | "error";
+  speed: number | null; // bytes/sec
+  etaSec: number | null;
 };
 
 type Ctx = {
   items: UploadItem[];
   addFiles: (files: File[] | FileList, folderId?: string) => void;
   removeItem: (id: string) => void;
+  retryItem: (id: string) => void;
   clearFinished: () => void;
   activeCount: number;
 };
@@ -35,16 +38,16 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const toastRef = useRef(toast);
   toastRef.current = toast;
+  // smoothed speed tracking per file
+  const rate = useRef<Map<string, { bytes: number; ts: number; ema: number }>>(new Map());
 
-  // Create + wire Uppy exactly once. Not useMemo — React StrictMode (dev)
-  // double-invokes effects, and destroying a memoized instance leaves a dead
-  // Uppy that silently ignores addFile. This instance intentionally lives for
-  // the app's lifetime (the provider sits in the root layout).
   const [uppy] = useState(() => {
     const a = makeAdapter();
     const u = new Uppy({ autoProceed: true, restrictions: { allowedFileTypes: ["video/*"] } });
     u.use(AwsS3, {
       shouldUseMultipart: (file) => a.shouldUseMultipart(file),
+      // more attempts, longer backoff — a flaky network shouldn't lose the upload
+      retryDelays: [0, 1000, 3000, 5000, 10_000, 20_000, 30_000],
       getUploadParameters: a.getUploadParameters as never,
       createMultipartUpload: a.createMultipartUpload as never,
       signPart: a.signPart as never,
@@ -56,7 +59,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     const upsert = (id: string, patch: Partial<UploadItem>) =>
       setItems((list) => list.map((x) => (x.id === id ? { ...x, ...patch } : x)));
 
-    u.on("file-added", (file) =>
+    u.on("file-added", (file) => {
+      rate.current.delete(file.id);
       setItems((list) => [
         ...list,
         {
@@ -65,43 +69,71 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           size: file.size ?? 0,
           progress: 0,
           status: "queued",
+          speed: null,
+          etaSec: null,
         },
-      ]),
-    );
+      ]);
+    });
+
     u.on("upload-progress", (file, prog) => {
       if (!file || !prog.bytesTotal) return;
+      const now = performance.now();
+      const prev = rate.current.get(file.id);
+      let speed: number | null = null;
+      if (prev) {
+        const dt = (now - prev.ts) / 1000;
+        const db = prog.bytesUploaded - prev.bytes;
+        if (dt > 0.15 && db >= 0) {
+          const inst = db / dt;
+          const ema = prev.ema ? prev.ema * 0.7 + inst * 0.3 : inst;
+          rate.current.set(file.id, { bytes: prog.bytesUploaded, ts: now, ema });
+          speed = ema;
+        } else {
+          speed = prev.ema || null;
+        }
+      } else {
+        rate.current.set(file.id, { bytes: prog.bytesUploaded, ts: now, ema: 0 });
+      }
+      const remaining = prog.bytesTotal - prog.bytesUploaded;
       upsert(file.id, {
         status: "uploading",
         progress: Math.round((prog.bytesUploaded / prog.bytesTotal) * 100),
+        speed,
+        etaSec: speed && speed > 0 ? remaining / speed : null,
       });
     });
+
     u.on("upload-success", async (file) => {
       if (!file) return;
+      rate.current.delete(file.id);
       const videoId = file.meta?.videoId as string | undefined;
       if (videoId && !a.shouldUseMultipart({ size: file.size ?? 0 })) {
         try {
           await a.finalizeSingle(videoId);
         } catch {
-          upsert(file.id, { status: "error" });
-          toastRef.current.show(`${file.name} 마무리에 실패했어요. 다시 시도해 주세요.`, "err");
+          upsert(file.id, { status: "error", speed: null, etaSec: null });
+          toastRef.current.show(`${file.name} 마무리에 실패했어요. "다시 시도"를 눌러 주세요.`, "err");
           return;
         }
       }
-      upsert(file.id, { status: "done", progress: 100 });
+      upsert(file.id, { status: "done", progress: 100, speed: null, etaSec: null });
       toastRef.current.show("업로드가 끝났어요");
     });
+
     u.on("upload-error", (file, error) => {
       console.error("[upload] upload-error", file?.name, error);
-      if (file) upsert(file.id, { status: "error" });
-      toastRef.current.show("업로드에 실패했어요", "err");
+      if (file) upsert(file.id, { status: "error", speed: null, etaSec: null });
+      toastRef.current.show("업로드가 멈췄어요. \"다시 시도\"를 누르면 이어서 올라가요.", "err");
     });
     u.on("error", (error) => console.error("[upload] uppy error", error));
     u.on("restriction-failed", (file, error) => {
-      console.warn("[upload] restriction-failed", file?.name, error);
       toastRef.current.show(`${file?.name ?? "파일"}: ${(error as Error).message}`, "err");
     });
     u.on("file-removed", (file) => {
-      if (file) setItems((list) => list.filter((x) => x.id !== file.id));
+      if (file) {
+        rate.current.delete(file.id);
+        setItems((list) => list.filter((x) => x.id !== file.id));
+      }
     });
     return u;
   });
@@ -122,7 +154,6 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
-      // autoProceed can miss a synchronous batch add — kick it explicitly
       void uppy.upload().catch((e) => console.error("[upload] upload() rejected", e));
     },
     [uppy],
@@ -139,6 +170,16 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     [uppy],
   );
 
+  const retryItem = useCallback(
+    (id: string) => {
+      setItems((list) =>
+        list.map((x) => (x.id === id ? { ...x, status: "uploading", speed: null, etaSec: null } : x)),
+      );
+      void uppy.retryUpload(id).catch((e) => console.error("[upload] retry rejected", e));
+    },
+    [uppy],
+  );
+
   const clearFinished = useCallback(
     () => setItems((list) => list.filter((x) => x.status === "uploading" || x.status === "queued")),
     [],
@@ -148,8 +189,21 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     (i) => i.status === "uploading" || i.status === "queued",
   ).length;
 
+  // warn before leaving while an upload is running
+  useEffect(() => {
+    if (activeCount === 0) return;
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [activeCount]);
+
   return (
-    <UploadCtx.Provider value={{ items, addFiles, removeItem, clearFinished, activeCount }}>
+    <UploadCtx.Provider
+      value={{ items, addFiles, removeItem, retryItem, clearFinished, activeCount }}
+    >
       {children}
     </UploadCtx.Provider>
   );
