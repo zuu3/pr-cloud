@@ -148,12 +148,24 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     setLoadingMore(false);
   }
 
-  function toggle(id: string) {
+  const selAnchor = useRef<number | null>(null);
+  function toggleAt(index: number, shift: boolean) {
     setSel((s) => {
       const n = new Set(s);
-      n.has(id) ? n.delete(id) : n.add(id);
+      if (shift && selAnchor.current !== null) {
+        const [a, b] = [selAnchor.current, index].sort((x, y) => x - y);
+        const add = !n.has(videos[index].id);
+        for (let k = a; k <= b; k++) {
+          if (add) n.add(videos[k].id);
+          else n.delete(videos[k].id);
+        }
+      } else {
+        const id = videos[index].id;
+        n.has(id) ? n.delete(id) : n.add(id);
+      }
       return n;
     });
+    selAnchor.current = index;
   }
 
   const currentFolder = folders.find((f) => f.id === folderId);
@@ -455,7 +467,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                 onClick={(e) => {
                   if (selMode) {
                     e.preventDefault();
-                    toggle(v.id);
+                    toggleAt(i, e.shiftKey);
                   }
                 }}
                 className={`group relative block overflow-hidden rounded-2xl border bg-canvas transition-all duration-200 ${

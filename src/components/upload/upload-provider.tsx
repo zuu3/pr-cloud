@@ -20,7 +20,7 @@ export type UploadItem = {
 type Ctx = {
   items: UploadItem[];
   addFiles: (files: File[] | FileList, folderId?: string) => void;
-  addFilesWithFolders: (items: { file: File; folderId: string }[]) => void;
+  addFilesWithFolders: (items: { file: File; folderId: string; name?: string }[]) => void;
   removeItem: (id: string) => void;
   retryItem: (id: string) => void;
   clearFinished: () => void;
@@ -152,9 +152,9 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     return u;
   });
 
-  const addOne = (f: File, folderId: string) => {
+  const addOne = (f: File, folderId: string, name?: string) => {
     try {
-      uppy.addFile({ name: f.name, type: f.type, data: f, meta: { folderId } });
+      uppy.addFile({ name: name ?? f.name, type: f.type, data: f, meta: { folderId } });
     } catch (e) {
       const msg = String((e as Error)?.message ?? "");
       if (/already added|noDuplicates/i.test(msg)) {
@@ -177,8 +177,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addFilesWithFolders = useCallback(
-    (list: { file: File; folderId: string }[]) => {
-      for (const it of list) addOne(it.file, it.folderId);
+    (list: { file: File; folderId: string; name?: string }[]) => {
+      for (const it of list) addOne(it.file, it.folderId, it.name);
       void uppy.upload().catch((e) => console.error("[upload] upload() rejected", e));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

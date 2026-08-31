@@ -3,16 +3,18 @@
 import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FolderPicker } from "@/components/folder-picker";
-import { IconUpload } from "@/components/ui/icons";
+import { IconUpload, IconFolder } from "@/components/ui/icons";
 import { useUpload } from "@/components/upload/upload-provider";
 import { useToast } from "@/components/ui/toast";
-import type { FolderNode } from "@/lib/folders";
+import { useDialog } from "@/components/ui/dialog";
+import { MAX_FOLDER_DEPTH, depthOf, type FolderNode } from "@/lib/folders";
 
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv|mts|m2ts|wmv|flv|mpg|mpeg|3gp|ogv)$/i;
 
 export function Uploader({ folders }: { folders: FolderNode[] }) {
   const { addFiles, addFilesWithFolders } = useUpload();
   const toast = useToast();
+  const dialog = useDialog();
   const params = useSearchParams();
   const initial = params.get("folderId") ?? "";
   const [folderId, setFolderId] = useState(
@@ -23,53 +25,94 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
 
-  function take(files: FileList | File[]) {
-    addFiles(files, folderId || undefined);
+  // returns the files that should actually upload (dupes removed), or null to abort
+  async function screenDupes(files: File[]): Promise<File[] | null> {
+    let dupes: string[] = [];
+    try {
+      const res = await fetch("/api/uploads/check", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ items: files.map((f) => ({ name: f.name, size: f.size })) }),
+      });
+      if (res.ok) dupes = (await res.json()).dupes ?? [];
+    } catch {
+      return files; // never block an upload because the check failed
+    }
+    if (dupes.length === 0) return files;
+
+    const dupeSet = new Set(dupes);
+    const remaining = files.filter((f) => !dupeSet.has(f.name));
+    if (remaining.length === 0) {
+      toast.show("이미 다 올라온 영상이에요", "err");
+      return null;
+    }
+    const ok = await dialog.confirm({
+      title: `이미 올라온 영상 ${dupeSet.size}개`,
+      body: `파일 이름과 용량이 같은 영상이 이미 있어요. 겹치는 건 빼고 ${remaining.length}개만 올릴까요?`,
+      confirmText: "겹치는 것 빼고 올리기",
+    });
+    return ok ? remaining : null;
+  }
+
+  async function take(files: FileList | File[]) {
+    const list = await screenDupes(Array.from(files));
+    if (list) addFiles(list, folderId || undefined);
   }
 
   async function takeTree(fileList: FileList) {
-    const files = Array.from(fileList).filter(
+    const picked = Array.from(fileList).filter(
       (f) => f.type.startsWith("video/") || VIDEO_EXT.test(f.name),
     );
-    if (files.length === 0) {
+    if (picked.length === 0) {
       toast.show("폴더 안에 영상 파일이 없어요", "err");
       return;
     }
+    const files = await screenDupes(picked);
+    if (!files) return;
     setPreparing(true);
     try {
       const base = folderId || null;
-      const cache = new Map<string, string>(); // dir path -> folderId ("" = root/base)
-      const items: { file: File; folderId: string }[] = [];
-      let clamped = false;
+      const baseDepth = base ? depthOf(folders, base) : 0;
+      const budget = Math.max(0, MAX_FOLDER_DEPTH - baseDepth); // folders we can still nest
+
+      const cache = new Map<string, string>(); // kept-path -> folderId
+      const items: { file: File; folderId: string; name?: string }[] = [];
+      let flattened = 0;
 
       for (const f of files) {
         const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
-        const parts = rel.split("/");
-        parts.pop(); // drop filename
-        const key = parts.join("/");
+        const segs = rel.split("/");
+        segs.pop(); // filename
+        const keep = segs.slice(0, budget);
+        const extra = segs.slice(budget);
+        const key = keep.join("/");
 
         let fid = cache.get(key);
         if (fid === undefined) {
-          if (parts.length === 0) {
+          if (keep.length === 0) {
             fid = base ?? "";
           } else {
             const res = await fetch("/api/folders/ensure", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ segments: parts, parentId: base }),
+              body: JSON.stringify({ segments: keep, parentId: base }),
             });
             const data: { folderId?: string | null } = await res.json().catch(() => ({}));
             fid = (res.ok ? data.folderId : base) ?? "";
-            if (parts.length > 3) clamped = true;
           }
           cache.set(key, fid);
         }
-        items.push({ file: f, folderId: fid ?? "" });
+
+        const name = extra.length ? `${extra.join("_")}_${f.name}` : undefined;
+        if (name) flattened++;
+        items.push({ file: f, folderId: fid ?? "", name });
       }
 
       addFilesWithFolders(items);
-      if (clamped) {
-        toast.show("폴더는 3단계까지만 만들어져요. 더 깊은 영상은 상위 폴더에 담겼어요.");
+      if (flattened > 0) {
+        toast.show(
+          `폴더가 ${MAX_FOLDER_DEPTH}단계보다 깊어서 ${flattened}개는 하위 폴더 이름을 파일명 앞에 붙여 올렸어요.`,
+        );
       }
     } finally {
       setPreparing(false);
@@ -108,7 +151,7 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
           take(e.dataTransfer.files);
         }}
         onClick={() => inputRef.current?.click()}
-        className={`mt-4 grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-colors ${
+        className={`mt-4 grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed px-6 py-14 text-center transition-colors ${
           dragging ? "border-primary bg-weak-bg" : "border-border bg-surface hover:border-primary"
         }`}
       >
@@ -129,16 +172,22 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
         />
       </div>
 
-      <div className="mt-3 flex items-center gap-2 text-[13px]">
-        <button
-          type="button"
-          onClick={() => dirInputRef.current?.click()}
-          disabled={preparing}
-          className="font-medium text-primary hover:underline disabled:opacity-50"
-        >
-          {preparing ? "폴더 준비 중…" : "폴더 통째로 올리기"}
-        </button>
-        <span className="text-muted">— SD카드 폴더 구조 그대로 올라가요</span>
+      <div className="mt-3 rounded-2xl border border-border bg-canvas p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => dirInputRef.current?.click()}
+            disabled={preparing}
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-[14px] font-semibold text-body transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+          >
+            <IconFolder className="size-4" />
+            {preparing ? "폴더 준비 중…" : "폴더째로 올리기"}
+          </button>
+          <p className="min-w-0 flex-1 text-[13px] leading-[1.5] text-muted">
+            SD카드 폴더를 통째로 고르면 안쪽 구조 그대로 올라가요.
+            {` ${MAX_FOLDER_DEPTH}단계까지만 폴더로 만들고, 더 깊으면 파일명 앞에 붙여요.`}
+          </p>
+        </div>
         <input
           ref={dirInputRef}
           type="file"

@@ -22,6 +22,27 @@ export function UsersTable({ initial }: { initial: Row[] }) {
   const [rows, setRows] = useState<Row[]>(initial);
   const [email, setEmail] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+
+  const bulkM = useMutation({
+    mutationFn: (raw: string) =>
+      apiFetch("/api/admin/users/bulk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ raw }),
+      }),
+    onSuccess: (data: { added: Row[]; skipped: string[]; invalid: string[] }) => {
+      if (data.added.length) setRows((r) => [...r, ...data.added]);
+      setBulkText("");
+      const parts = [`추가 ${data.added.length}`];
+      if (data.skipped.length) parts.push(`이미 있음 ${data.skipped.length}`);
+      if (data.invalid.length) parts.push(`형식 오류 ${data.invalid.length}`);
+      toast.show(parts.join(" · "));
+      if (data.added.length && !data.invalid.length) setBulkOpen(false);
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
 
   const addM = useMutation({
     mutationFn: (raw: string) =>
@@ -106,9 +127,37 @@ export function UsersTable({ initial }: { initial: Row[] }) {
         </Button>
       </div>
       <p className="mt-1.5 text-[12px] text-muted">
-        학번만 입력하면 {`@${SCHOOL_DOMAIN}`}이 자동으로 붙어요.
+        학번만 입력하면 {`@${SCHOOL_DOMAIN}`}이 자동으로 붙어요.{" "}
+        <button
+          type="button"
+          onClick={() => setBulkOpen((v) => !v)}
+          className="font-medium text-primary hover:underline"
+        >
+          여러 명 추가
+        </button>
       </p>
       {err && <p className="mt-2 text-[13px] text-danger">{err}</p>}
+
+      {bulkOpen && (
+        <div className="mt-3 rounded-xl border border-border p-3">
+          <textarea
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            rows={5}
+            placeholder={`한 줄에 하나씩 붙여넣기\n24.001\n24.002\n홍길동@${SCHOOL_DOMAIN}`}
+            className="w-full resize-y rounded-lg border border-border bg-surface p-2.5 text-[13px] outline-none focus:border-primary focus:bg-canvas"
+          />
+          <div className="mt-2 flex justify-end">
+            <Button
+              onClick={() => bulkText.trim() && bulkM.mutate(bulkText)}
+              size="md"
+              loading={bulkM.isPending}
+            >
+              일괄 추가
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 rounded-2xl border border-border">
         <table className="w-full text-[14px]">

@@ -27,6 +27,32 @@ describe("admin users API", () => {
     expect((await GET()).status).toBe(403);
   });
 
+  it("bulk invite adds new, skips existing, reports invalid", async () => {
+    mockSession({ email: "admin@school.ac.kr", role: "admin" });
+    await db.prisma.user.create({
+      data: { email: "24.001@bssm.hs.kr", role: "member", status: "invited" },
+    });
+    const { POST } = await import("@/app/api/admin/users/bulk/route");
+    const r = await POST(
+      req("/api/admin/users/bulk", jbody({ raw: "24.001\n24.002\n24.002\nnot an email\nfoo@bar.com" })),
+    );
+    expect(r.status).toBe(200);
+    const d = await r.json();
+    expect(d.added.map((u: { email: string }) => u.email).sort()).toEqual([
+      "24.002@bssm.hs.kr",
+      "foo@bar.com",
+    ]);
+    expect(d.skipped).toEqual(["24.001@bssm.hs.kr"]);
+    expect(d.invalid).toEqual(["not", "an", "email"]);
+    expect(await db.prisma.user.count()).toBe(4); // admin + 24.001 + 24.002 + foo
+  });
+
+  it("bulk invite requires admin", async () => {
+    mockSession({ email: "m@school.ac.kr", role: "member" });
+    const { POST } = await import("@/app/api/admin/users/bulk/route");
+    expect((await POST(req("/api/admin/users/bulk", jbody({ raw: "24.001" })))).status).toBe(403);
+  });
+
   it("admin can invite, list, and it is audited", async () => {
     mockSession({ email: "admin@school.ac.kr", role: "admin" });
     const { POST, GET } = await import("@/app/api/admin/users/route");
