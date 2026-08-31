@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 
 export function SharePanel({ videoId }: { videoId: string }) {
+  const toast = useToast();
   const [expiresAt, setExpiresAt] = useState("");
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -28,6 +30,7 @@ export function SharePanel({ videoId }: { videoId: string }) {
     if (!link) return;
     await navigator.clipboard.writeText(link);
     setCopied(true);
+    toast.show("링크를 복사했어요");
     setTimeout(() => setCopied(false), 1500);
   }
 

@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export function VideoPlayer({ videoId }: { videoId: string }) {
+export function VideoPlayer({
+  videoId,
+  poster,
+}: {
+  videoId: string;
+  poster?: string | null;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [err, setErr] = useState(false);
   const retried = useRef(false);
@@ -22,17 +28,22 @@ export function VideoPlayer({ videoId }: { videoId: string }) {
   }, [videoId]);
 
   if (err) {
-    return <p className="text-[14px] text-danger">영상을 불러오지 못했어요.</p>;
+    return (
+      <div className="grid aspect-video place-items-center bg-surface text-[14px] text-danger">
+        영상을 불러오지 못했어요.
+      </div>
+    );
   }
   if (!url) {
-    return <div className="aspect-video w-full animate-pulse rounded-xl bg-surface" />;
+    return <div className="aspect-video w-full animate-pulse bg-surface" />;
   }
   return (
     <video
       key={url}
       src={url}
+      poster={poster ?? undefined}
       controls
-      className="w-full rounded-xl bg-black"
+      className="aspect-video w-full bg-black"
       onError={() => {
         if (!retried.current) {
           retried.current = true;

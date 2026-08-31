@@ -13,12 +13,13 @@ async function api(path: string) {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ folderId?: string; q?: string }>;
+  searchParams: Promise<{ folderId?: string; q?: string; sort?: string }>;
 }) {
   const sp = await searchParams;
   const qs = new URLSearchParams();
   if (sp.folderId) qs.set("folderId", sp.folderId);
   if (sp.q) qs.set("q", sp.q);
+  if (sp.sort) qs.set("sort", sp.sort);
 
   const [list, folders] = await Promise.all([api(`/api/videos?${qs}`), api(`/api/folders`)]);
   return (

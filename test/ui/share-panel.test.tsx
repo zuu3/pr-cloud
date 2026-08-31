@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { SharePanel } from "@/components/share-panel";
+import { ToastProvider } from "@/components/ui/toast";
+
+const render = (ui: React.ReactElement) => rtlRender(<ToastProvider>{ui}</ToastProvider>);
 
 afterEach(() => {
   cleanup();
