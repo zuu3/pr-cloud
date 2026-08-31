@@ -7,6 +7,7 @@ import { MAX_FOLDER_DEPTH } from "@/lib/folders";
 import { IconFolder, IconFilm, IconPlay, IconCheck } from "@/components/ui/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
 import { useMutation } from "@tanstack/react-query";
 import { humanSize, humanDuration } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -378,11 +379,17 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         </div>
       ) : (
         <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {videos.map((v) => {
+          {videos.map((v, i) => {
             const checked = sel.has(v.id);
             return (
-              <Link
+              <motion.div
                 key={v.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: Math.min(i, 11) * 0.03, ease: "easeOut" }}
+                whileTap={{ scale: 0.985 }}
+              >
+              <Link
                 href={`/v/${v.id}`}
                 draggable
                 onDragStart={(e) => onCardDragStart(e, v.id)}
@@ -392,7 +399,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                     toggle(v.id);
                   }
                 }}
-                className={`group relative overflow-hidden rounded-2xl border bg-canvas transition-all ${
+                className={`group relative block overflow-hidden rounded-2xl border bg-canvas transition-all duration-200 ${
                   checked
                     ? "border-primary ring-2 ring-primary/30"
                     : "border-border hover:-translate-y-1 hover:border-primary hover:shadow-[0_8px_24px_-12px_rgba(25,31,40,0.15)]"
@@ -437,6 +444,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                   </p>
                 </div>
               </Link>
+              </motion.div>
             );
           })}
         </div>
@@ -450,8 +458,15 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         </div>
       )}
 
+      <AnimatePresence>
       {selMode && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-canvas/95 backdrop-blur-sm">
+        <motion.div
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ type: "spring", stiffness: 420, damping: 36 }}
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-canvas/95 backdrop-blur-sm"
+        >
           <div className="mx-auto flex max-w-[1120px] items-center gap-3 px-6 py-3">
             <span className="text-[14px] font-semibold text-foreground">{sel.size}개 선택</span>
             <button
@@ -481,17 +496,27 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               </Button>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {moveOpen && (
-        <div
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
           className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 px-6"
           onClick={() => setMoveOpen(false)}
         >
-          <div
+          <motion.div
             role="dialog"
             aria-modal
+            initial={{ opacity: 0, scale: 0.94, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ type: "spring", stiffness: 420, damping: 32 }}
             className="w-full max-w-[360px] rounded-2xl bg-canvas p-5 shadow-[0_16px_48px_-12px_rgba(25,31,40,0.3)]"
             onClick={(e) => e.stopPropagation()}
           >
@@ -506,9 +531,10 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                 취소
               </Button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </main>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MotionConfig } from "motion/react";
 import { ToastProvider } from "@/components/ui/toast";
 import { DialogProvider } from "@/components/ui/dialog";
 import { UploadProvider } from "@/components/upload/upload-provider";
@@ -16,14 +17,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
   return (
     <QueryClientProvider client={qc}>
-      <ToastProvider>
-        <DialogProvider>
-          <UploadProvider>
-            {children}
-            <UploadTray />
-          </UploadProvider>
-        </DialogProvider>
-      </ToastProvider>
+      <MotionConfig reducedMotion="user">
+        <ToastProvider>
+          <DialogProvider>
+            <UploadProvider>
+              {children}
+              <UploadTray />
+            </UploadProvider>
+          </DialogProvider>
+        </ToastProvider>
+      </MotionConfig>
     </QueryClientProvider>
   );
 }

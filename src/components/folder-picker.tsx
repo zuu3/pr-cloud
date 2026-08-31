@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { folderPath, folderTree, type FolderNode } from "@/lib/folders";
 import { IconChevronDown, IconFolder, IconCheck } from "@/components/ui/icons";
 
@@ -56,20 +57,29 @@ export function FolderPicker({
         <IconChevronDown className="size-4 shrink-0 text-muted" />
       </button>
 
-      {open && (
-        <div className="absolute left-0 top-11 z-50 max-h-72 w-[min(320px,80vw)] overflow-auto rounded-xl border border-border bg-canvas p-1 shadow-[0_12px_32px_-8px_rgba(25,31,40,0.25)]">
-          <Row label="보관함 루트" depth={0} selected={value === ""} onClick={() => pick("")} />
-          {tree.map((f) => (
-            <Row
-              key={f.id}
-              label={f.name}
-              depth={f.depth + 1}
-              selected={value === f.id}
-              onClick={() => pick(f.id)}
-            />
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: -6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: -6 }}
+            transition={{ type: "spring", stiffness: 500, damping: 36 }}
+            style={{ transformOrigin: "top" }}
+            className="absolute left-0 top-11 z-50 max-h-72 w-[min(320px,80vw)] overflow-auto rounded-xl border border-border bg-canvas p-1 shadow-[0_12px_32px_-8px_rgba(25,31,40,0.25)]"
+          >
+            <Row label="보관함 루트" depth={0} selected={value === ""} onClick={() => pick("")} />
+            {tree.map((f) => (
+              <Row
+                key={f.id}
+                label={f.name}
+                depth={f.depth + 1}
+                selected={value === f.id}
+                onClick={() => pick(f.id)}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

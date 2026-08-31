@@ -6,9 +6,9 @@ type Size = "md" | "lg";
 
 const base =
   "inline-flex items-center justify-center gap-1.5 font-semibold whitespace-nowrap " +
-  "transition-colors outline-none select-none " +
+  "transition-[transform,background-color,color,opacity] duration-150 outline-none select-none " +
   "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 " +
-  "disabled:opacity-40 disabled:pointer-events-none active:translate-y-px";
+  "disabled:opacity-40 disabled:pointer-events-none active:scale-[0.97]";
 
 const sizes: Record<Size, string> = {
   md: "h-10 rounded-lg px-4 text-[15px]",
