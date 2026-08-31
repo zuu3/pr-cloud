@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth, signIn } from "@/lib/auth";
-import { IconFilm } from "@/components/ui/icons";
+import { Logo } from "@/components/ui/icons";
 
 function GoogleG() {
   return (
@@ -36,24 +36,18 @@ export default async function LoginPage({
 
   return (
     <main className="relative grid min-h-screen place-items-center overflow-hidden bg-surface px-6">
-      {/* soft brand wash */}
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 size-[520px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
       />
 
-      <div className="relative w-full max-w-[400px] rounded-3xl border border-border bg-canvas p-8 shadow-[0_24px_64px_-24px_rgba(25,31,40,0.25)]">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-weak-bg text-[22px] text-primary">
-          <IconFilm />
-        </div>
+      <div className="relative w-full max-w-[380px] rounded-3xl border border-border bg-canvas p-8 shadow-[0_24px_64px_-24px_rgba(25,31,40,0.25)]">
+        <Logo className="size-11" />
 
-        <h1 className="mt-6 text-[28px] font-bold leading-[1.32] tracking-[-0.01em] text-foreground">
+        <h1 className="mt-7 text-[27px] font-bold leading-[1.34] tracking-[-0.01em] text-foreground">
           홍보부 영상,
           <br />한곳에 모아요
         </h1>
-        <p className="mt-2.5 text-[15px] leading-[1.6] text-body">
-          촬영한 영상을 올리고, 필요한 사람에게 링크 하나로 전달해요.
-        </p>
 
         {error && (
           <p className="mt-6 rounded-xl bg-[#fdecee] px-3.5 py-2.5 text-[13px] leading-[1.5] text-danger">
@@ -76,7 +70,7 @@ export default async function LoginPage({
 
         <p className="mt-4 text-center text-[12px] text-muted">
           <span className="rounded-md bg-surface px-1.5 py-0.5 font-medium">bssm.hs.kr</span>{" "}
-          계정만 로그인할 수 있어요
+          계정만 가능해요
         </p>
       </div>
     </main>
