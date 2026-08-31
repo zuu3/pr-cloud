@@ -9,6 +9,7 @@ import { handle, HttpError } from "@/lib/http";
 import { s3Internal, BUCKET } from "@/lib/s3";
 import { folderPath } from "@/lib/folders";
 import { subtreeIds } from "@/lib/subtree";
+import { assertRate } from "@/lib/ratelimit";
 import { logAudit } from "@/lib/audit";
 
 // Streams a ZIP (stored, not compressed — video is already compressed) built
@@ -16,6 +17,7 @@ import { logAudit } from "@/lib/audit";
 export async function GET(request: Request) {
   return handle(async () => {
     const user = await requireUser();
+    assertRate(`zip:${user.email}`, 20, 60_000);
     const p = new URL(request.url).searchParams;
     const folderId = p.get("folderId");
     const ids = (p.get("ids") ?? "").split(",").filter(Boolean);
