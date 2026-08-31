@@ -33,13 +33,18 @@ export function TrashList({ initial }: { initial: Row[] }) {
   const pendingAction = m.isPending ? m.variables?.action : undefined;
 
   async function emptyTrash() {
-    const ok = await dialog.confirm({
+    const val = await dialog.prompt({
       title: "휴지통을 비울까요?",
-      body: `${rows.length}개 영상을 저장소에서 영구히 지워요. 되돌릴 수 없어요.`,
-      danger: true,
+      label: `${rows.length}개 영상을 저장소에서 영구히 지워요. 되돌릴 수 없어요. 확인하려면 "삭제"를 입력하세요.`,
       confirmText: "휴지통 비우기",
+      maxLength: 4,
     });
-    if (ok) m.mutate({ action: "purge", ids: rows.map((r) => r.id) });
+    if (val === null) return;
+    if (val !== "삭제") {
+      toast.show('"삭제"를 정확히 입력해야 비울 수 있어요', "err");
+      return;
+    }
+    m.mutate({ action: "purge", ids: rows.map((r) => r.id) });
   }
 
   async function purgeOne(r: Row) {

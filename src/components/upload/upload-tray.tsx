@@ -56,9 +56,18 @@ export function UploadTray() {
               {items.map((it) => (
                 <li key={it.id} className="rounded-lg px-2 py-2">
                   <div className="flex items-center gap-2 text-[12px]">
-                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                      {it.name}
-                    </span>
+                    {it.status === "done" && it.videoId ? (
+                      <Link
+                        href={`/v/${it.videoId}`}
+                        className="min-w-0 flex-1 truncate font-medium text-primary hover:underline"
+                      >
+                        {it.name}
+                      </Link>
+                    ) : (
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                        {it.name}
+                      </span>
+                    )}
                     <span
                       className={`shrink-0 font-medium ${
                         it.status === "error"

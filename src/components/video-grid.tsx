@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FolderMenu } from "@/components/folder-menu";
+import { PendingUploads } from "@/components/pending-uploads";
 import { FolderPicker } from "@/components/folder-picker";
 import { Dropdown } from "@/components/ui/dropdown";
 import { MAX_FOLDER_DEPTH } from "@/lib/folders";
@@ -266,6 +267,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
 
   return (
     <main className="mx-auto max-w-[1120px] px-6 py-10 pb-24 sm:py-12">
+      <PendingUploads />
       {currentFolder && (
         <nav className="mb-2 flex flex-wrap items-center gap-1.5 text-[13px] text-muted">
           <Link
