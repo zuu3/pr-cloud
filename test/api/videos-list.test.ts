@@ -56,6 +56,51 @@ describe("videos list API", () => {
     expect(data.videos.map((v: { title: string }) => v.title)).toEqual(["축제 오프닝"]);
   });
 
+  it("mine=1 returns only the caller's uploads", async () => {
+    await db.prisma.video.createMany({
+      data: [
+        { title: "mine-a", s3Key: "km1", originalFilename: "a.mp4", status: "ready", uploadedBy: "me@school.ac.kr" },
+        { title: "theirs", s3Key: "km2", originalFilename: "b.mp4", status: "ready", uploadedBy: "you@school.ac.kr" },
+      ],
+    });
+    mockSession({ email: "me@school.ac.kr", role: "member" });
+    const { GET } = await import("@/app/api/videos/route");
+    const data = await (await GET(req("/api/videos?mine=1"))).json();
+    expect(data.videos.map((v: { title: string }) => v.title)).toEqual(["mine-a"]);
+  });
+
+  it("days=7 excludes videos older than the window", async () => {
+    const old = await db.prisma.video.create({
+      data: { title: "old", s3Key: "kd1", originalFilename: "a.mp4", status: "ready" },
+    });
+    await db.prisma.video.update({
+      where: { id: old.id },
+      data: { createdAt: new Date(Date.now() - 30 * 86_400_000) },
+    });
+    await db.prisma.video.create({
+      data: { title: "recent", s3Key: "kd2", originalFilename: "b.mp4", status: "ready" },
+    });
+    mockSession({ email: "m@school.ac.kr", role: "member" });
+    const { GET } = await import("@/app/api/videos/route");
+    const data = await (await GET(req("/api/videos?days=7"))).json();
+    expect(data.videos.map((v: { title: string }) => v.title)).toEqual(["recent"]);
+  });
+
+  it("sort=views orders by view count", async () => {
+    const a = await db.prisma.video.create({
+      data: { title: "low", s3Key: "kv1", originalFilename: "a.mp4", status: "ready", viewCount: 2 },
+    });
+    const b = await db.prisma.video.create({
+      data: { title: "high", s3Key: "kv2", originalFilename: "b.mp4", status: "ready", viewCount: 99 },
+    });
+    void a;
+    void b;
+    mockSession({ email: "m@school.ac.kr", role: "member" });
+    const { GET } = await import("@/app/api/videos/route");
+    const data = await (await GET(req("/api/videos?sort=views"))).json();
+    expect(data.videos.map((v: { title: string }) => v.title)).toEqual(["high", "low"]);
+  });
+
   it("member cannot delete another user's video (403); admin can (204)", async () => {
     const v = await db.prisma.video.create({
       data: {

@@ -13,13 +13,21 @@ async function api(path: string) {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ folderId?: string; q?: string; sort?: string }>;
+  searchParams: Promise<{
+    folderId?: string;
+    q?: string;
+    sort?: string;
+    mine?: string;
+    days?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const qs = new URLSearchParams();
   if (sp.folderId) qs.set("folderId", sp.folderId);
   if (sp.q) qs.set("q", sp.q);
   if (sp.sort) qs.set("sort", sp.sort);
+  if (sp.mine) qs.set("mine", sp.mine);
+  if (sp.days) qs.set("days", sp.days);
 
   const [list, folders] = await Promise.all([api(`/api/videos?${qs}`), api(`/api/folders`)]);
   return (
