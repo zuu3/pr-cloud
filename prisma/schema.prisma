@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  member
+  admin
+}
+
+enum UserStatus {
+  invited
+  active
+}
+
+enum VideoStatus {
+  pending
+  uploading
+  ready
+  failed
+}
+
+model User {
+  email     String     @id
+  role      Role       @default(member)
+  status    UserStatus @default(invited)
+  name      String?
+  googleSub String?    @unique
+  createdAt DateTime   @default(now())
+}
+
+model Folder {
+  id        String   @id @default(uuid())
+  name      String
+  parentId  String?
+  parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  Folder[] @relation("FolderTree")
+  createdBy String?
+  createdAt DateTime @default(now())
+  videos    Video[]
+}
+
+model Video {
+  id               String      @id @default(uuid())
+  folderId         String?
+  folder           Folder?     @relation(fields: [folderId], references: [id], onDelete: Restrict)
+  title            String
+  description      String?
+  s3Key            String      @unique
+  sizeBytes        BigInt?
+  contentType      String?
+  originalFilename String
+  status           VideoStatus @default(pending)
+  durationSec      Int?
+  thumbKey         String?
+  uploadedBy       String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  upload           Upload?
+  shareLinks       ShareLink[]
+}
+
+model Upload {
+  videoId    String   @id
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  s3UploadId String
+  partSize   Int
+  partsJson  Json     @default("[]")
+  createdAt  DateTime @default(now())
+}
+
+model ShareLink {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  videoId   String
+  video     Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  expiresAt DateTime?
+  createdBy String?
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  actorEmail String?
+  action     String
+  targetId   String?
+  at         DateTime @default(now())
+}

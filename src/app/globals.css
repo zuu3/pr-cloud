@@ -1,0 +1,40 @@
+@import "tailwindcss";
+/* Pretendard is loaded via <link> in layout.tsx */
+
+/* Design tokens — see /DESIGN.md (Toss reference, verified 2026-07-11) */
+@theme {
+  --color-primary: #3182f6;
+  --color-primary-hover: #2272eb;
+  --color-canvas: #ffffff;
+  --color-foreground: #191f28;
+  --color-body: #4e5968;
+  --color-muted: #8b95a1;
+  --color-surface: #f2f4f6;
+  --color-border: #e5e8eb;
+  --color-weak-bg: #e8f3ff;
+  --color-weak-fg: #1b64da;
+  --color-danger: #e42939;
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, system-ui,
+    "Segoe UI", Roboto, sans-serif;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-body);
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4 {
+  color: var(--color-foreground);
+}
