@@ -6,11 +6,11 @@ import type { Prisma } from "@prisma/client";
 
 type SortKey = "new" | "old" | "title" | "size";
 
-const orderBy: Record<SortKey, Prisma.VideoOrderByWithRelationInput> = {
-  new: { createdAt: "desc" },
-  old: { createdAt: "asc" },
-  title: { title: "asc" },
-  size: { sizeBytes: "desc" },
+const orderBy: Record<SortKey, Prisma.VideoOrderByWithRelationInput[]> = {
+  new: [{ createdAt: "desc" }, { id: "desc" }],
+  old: [{ createdAt: "asc" }, { id: "asc" }],
+  title: [{ title: "asc" }, { id: "asc" }],
+  size: [{ sizeBytes: "desc" }, { id: "desc" }],
 };
 
 export async function GET(request: Request) {

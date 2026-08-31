@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { handle, json, HttpError } from "@/lib/http";
@@ -36,10 +36,16 @@ export async function POST(request: Request) {
     } else if (action === "restore") {
       await prisma.video.updateMany({ where: { id: { in: okIds } }, data: { deletedAt: null } });
     } else if (action === "purge") {
-      for (const v of videos) {
-        for (const key of [v.s3Key, v.thumbKey].filter(Boolean) as string[]) {
-          await s3Internal.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key })).catch(() => {});
-        }
+      const keys = videos.flatMap((v) => [v.s3Key, v.thumbKey].filter(Boolean) as string[]);
+      for (let i = 0; i < keys.length; i += 1000) {
+        await s3Internal
+          .send(
+            new DeleteObjectsCommand({
+              Bucket: BUCKET,
+              Delete: { Objects: keys.slice(i, i + 1000).map((Key) => ({ Key })), Quiet: true },
+            }),
+          )
+          .catch(() => {});
       }
       await prisma.video.deleteMany({ where: { id: { in: okIds } } });
     }
