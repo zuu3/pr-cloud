@@ -102,13 +102,15 @@ export function TrashList({ initial }: { initial: Row[] }) {
             </div>
             <button
               onClick={() => m.mutate({ action: "restore", ids: [r.id] })}
-              className="rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-weak-fg hover:bg-weak-bg"
+              disabled={m.isPending}
+              className="rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-weak-fg hover:bg-weak-bg disabled:opacity-40"
             >
               되살리기
             </button>
             <button
               onClick={() => purgeOne(r)}
-              className="rounded-lg px-2.5 py-1.5 text-[13px] text-danger hover:bg-[#fdecee]"
+              disabled={m.isPending}
+              className="rounded-lg px-2.5 py-1.5 text-[13px] text-danger hover:bg-[#fdecee] disabled:opacity-40"
             >
               영구 삭제
             </button>

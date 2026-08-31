@@ -52,6 +52,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [selMode, setSelMode] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [dropTarget, setDropTarget] = useState<string | null>(null); // folderId | "" (root)
+  const [loadingMore, setLoadingMore] = useState(false);
   const first = useRef(true);
 
   function onCardDragStart(e: React.DragEvent, videoId: string) {
@@ -113,7 +114,8 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   }, [q, folderId, sort, router]);
 
   async function loadMore() {
-    if (!cursor) return;
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
     const sp = new URLSearchParams();
     if (folderId) sp.set("folderId", folderId);
     if (q.trim()) sp.set("q", q.trim());
@@ -125,6 +127,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       setVideos((v) => [...v, ...page.videos]);
       setCursor(page.nextCursor);
     }
+    setLoadingMore(false);
   }
 
   function toggle(id: string) {
@@ -155,6 +158,9 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       setVideos((list) => list.filter((x) => !v.ids.includes(x.id)));
       exitSelect();
       toast.show(v.action === "trash" ? `${data.count}개를 삭제했어요` : `${data.count}개를 옮겼어요`);
+      if (v.action === "move" && v.folderId !== (folderId ?? null)) {
+        router.push(v.folderId ? `/?folderId=${v.folderId}` : "/");
+      }
     },
     onError: (e: Error) => toast.show(e.message, "err"),
   });
@@ -198,6 +204,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   });
 
   async function bulkDelete() {
+    if (sel.size === 0) return;
     const ok = await dialog.confirm({
       title: `${sel.size}개 영상을 삭제할까요?`,
       body: "휴지통으로 옮겨요. 나중에 되살릴 수 있어요.",
@@ -209,6 +216,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
 
   function bulkMoveTo(folderId: string) {
     setMoveOpen(false);
+    if (sel.size === 0) return;
     bulkM.mutate({ action: "move", folderId: folderId || null, ids: [...sel] });
   }
 
@@ -460,7 +468,13 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
 
       {cursor && (
         <div className="mt-8 text-center">
-          <Button variant="ghost" size="md" onClick={loadMore} className="border border-border">
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={loadMore}
+            loading={loadingMore}
+            className="border border-border"
+          >
             더 보기
           </Button>
         </div>
@@ -476,7 +490,9 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-canvas/95 backdrop-blur-sm"
         >
           <div className="mx-auto flex max-w-[1120px] items-center gap-3 px-6 py-3">
-            <span className="text-[14px] font-semibold text-foreground">{sel.size}개 선택</span>
+            <span className="text-[14px] font-semibold text-foreground">
+              {sel.size > 0 ? `${sel.size}개 선택` : "영상을 선택하세요"}
+            </span>
             <button
               onClick={() =>
                 setSel(
@@ -487,7 +503,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               }
               className="text-[13px] text-muted hover:text-body"
             >
-              {sel.size === videos.length ? "전체 해제" : "전체 선택"}
+              {sel.size === videos.length && videos.length > 0 ? "전체 해제" : "전체 선택"}
             </button>
             <div className="ml-auto flex gap-2">
               <Button
@@ -495,11 +511,18 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                 size="md"
                 className="border border-border"
                 onClick={() => setMoveOpen(true)}
+                disabled={sel.size === 0}
                 loading={bulkM.isPending}
               >
                 폴더 이동
               </Button>
-              <Button variant="danger" size="md" onClick={bulkDelete} loading={bulkM.isPending}>
+              <Button
+                variant="danger"
+                size="md"
+                onClick={bulkDelete}
+                disabled={sel.size === 0}
+                loading={bulkM.isPending}
+              >
                 삭제
               </Button>
             </div>
