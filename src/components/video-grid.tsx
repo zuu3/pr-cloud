@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { humanSize, humanDuration } from "@/lib/format";
@@ -40,7 +40,11 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [cursor, setCursor] = useState<string | null>(initial.nextCursor);
   const [q, setQ] = useState(params.get("q") ?? "");
   const [sort, setSort] = useState(params.get("sort") ?? "new");
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const first = useRef(true);
+
+  const selMode = sel.size > 0;
+  const allFolders = useMemo(() => folders, [folders]);
 
   useEffect(() => {
     if (first.current) {
@@ -58,6 +62,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         const page: Page = await res.json();
         setVideos(page.videos);
         setCursor(page.nextCursor);
+        setSel(new Set());
       }
     }, 280);
     return () => clearTimeout(t);
@@ -76,6 +81,51 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       setVideos((v) => [...v, ...page.videos]);
       setCursor(page.nextCursor);
     }
+  }
+
+  function toggle(id: string) {
+    setSel((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  }
+
+  async function bulk(action: "trash" | "move", folderIdArg?: string | null) {
+    const ids = [...sel];
+    const res = await fetch("/api/videos/bulk", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids, action, folderId: folderIdArg }),
+    });
+    if (!res.ok) return toast.show("작업에 실패했어요", "err");
+    const { count } = await res.json();
+    setVideos((v) => v.filter((x) => !sel.has(x.id)));
+    setSel(new Set());
+    toast.show(action === "trash" ? `${count}개를 삭제했어요` : `${count}개를 옮겼어요`);
+  }
+
+  async function bulkDelete() {
+    const ok = await dialog.confirm({
+      title: `${sel.size}개 영상을 삭제할까요?`,
+      body: "휴지통으로 옮겨요. 나중에 되살릴 수 있어요.",
+      danger: true,
+      confirmText: "삭제",
+    });
+    if (ok) void bulk("trash");
+  }
+
+  async function bulkMove() {
+    const options = [{ id: "", name: "보관함 루트" }, ...allFolders];
+    const picked = await dialog.prompt({
+      title: "폴더로 이동",
+      label: "폴더 이름을 입력하세요 (비우면 루트)",
+      confirmText: "이동",
+    });
+    if (picked === null) return;
+    const target = options.find((f) => f.name === picked.trim());
+    if (picked.trim() && !target) return toast.show("그런 이름의 폴더가 없어요", "err");
+    void bulk("move", target?.id || null);
   }
 
   const currentFolder = folders.find((f) => f.id === folderId);
@@ -136,7 +186,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   }
 
   return (
-    <main className="mx-auto max-w-[1120px] px-6 py-10 sm:py-12">
+    <main className="mx-auto max-w-[1120px] px-6 py-10 pb-24 sm:py-12">
       {currentFolder && (
         <nav className="mb-2 flex items-center gap-1.5 text-[13px] text-muted">
           <Link href="/" className="hover:text-body">
@@ -175,6 +225,18 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          {videos.length > 0 && (
+            <button
+              onClick={() => setSel(selMode ? new Set() : new Set([videos[0].id]))}
+              className={`h-10 rounded-xl border px-3 text-[13px] font-medium transition-colors ${
+                selMode
+                  ? "border-primary bg-weak-bg text-weak-fg"
+                  : "border-border text-body hover:border-primary"
+              }`}
+            >
+              {selMode ? "선택 취소" : "선택"}
+            </button>
+          )}
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
@@ -241,41 +303,65 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
         </div>
       ) : (
         <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {videos.map((v) => (
-            <Link
-              key={v.id}
-              href={`/v/${v.id}`}
-              className="group overflow-hidden rounded-2xl border border-border bg-canvas transition-all hover:-translate-y-1 hover:border-primary hover:shadow-[0_8px_24px_-12px_rgba(25,31,40,0.15)]"
-            >
-              <div className="relative aspect-video bg-surface">
-                {v.thumbUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={v.thumbUrl}
-                    alt=""
-                    className="size-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="grid size-full place-items-center text-[32px] text-muted/50">
-                    ▶
-                  </div>
-                )}
-                {v.durationSec != null && (
-                  <span className="absolute bottom-2 right-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
-                    {humanDuration(v.durationSec)}
+          {videos.map((v) => {
+            const checked = sel.has(v.id);
+            return (
+              <Link
+                key={v.id}
+                href={`/v/${v.id}`}
+                onClick={(e) => {
+                  if (selMode) {
+                    e.preventDefault();
+                    toggle(v.id);
+                  }
+                }}
+                className={`group relative overflow-hidden rounded-2xl border bg-canvas transition-all ${
+                  checked
+                    ? "border-primary ring-2 ring-primary/30"
+                    : "border-border hover:-translate-y-1 hover:border-primary hover:shadow-[0_8px_24px_-12px_rgba(25,31,40,0.15)]"
+                }`}
+              >
+                {selMode && (
+                  <span
+                    className={`absolute left-2.5 top-2.5 z-10 grid size-6 place-items-center rounded-full border text-[13px] ${
+                      checked
+                        ? "border-primary bg-primary text-white"
+                        : "border-white bg-foreground/30 text-transparent"
+                    }`}
+                  >
+                    ✓
                   </span>
                 )}
-              </div>
-              <div className="p-4">
-                <p className="truncate text-[15px] font-semibold text-foreground">{v.title}</p>
-                <p className="mt-1 text-[12px] text-muted">
-                  {humanSize(v.sizeBytes)} · 조회 {v.viewCount} ·{" "}
-                  {new Date(v.createdAt).toLocaleDateString("ko-KR")}
-                </p>
-              </div>
-            </Link>
-          ))}
+                <div className="relative aspect-video bg-surface">
+                  {v.thumbUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={v.thumbUrl}
+                      alt=""
+                      className="size-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="grid size-full place-items-center text-[32px] text-muted/50">
+                      ▶
+                    </div>
+                  )}
+                  {v.durationSec != null && (
+                    <span className="absolute bottom-2 right-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                      {humanDuration(v.durationSec)}
+                    </span>
+                  )}
+                </div>
+                <div className="p-4">
+                  <p className="truncate text-[15px] font-semibold text-foreground">{v.title}</p>
+                  <p className="mt-1 text-[12px] text-muted">
+                    {humanSize(v.sizeBytes)} · 조회 {v.viewCount} ·{" "}
+                    {new Date(v.createdAt).toLocaleDateString("ko-KR")}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
 
@@ -284,6 +370,28 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           <Button variant="ghost" size="md" onClick={loadMore} className="border border-border">
             더 보기
           </Button>
+        </div>
+      )}
+
+      {selMode && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-canvas/95 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-[1120px] items-center gap-3 px-6 py-3">
+            <span className="text-[14px] font-semibold text-foreground">{sel.size}개 선택</span>
+            <button
+              onClick={() => setSel(new Set(videos.map((v) => v.id)))}
+              className="text-[13px] text-muted hover:text-body"
+            >
+              전체 선택
+            </button>
+            <div className="ml-auto flex gap-2">
+              <Button variant="ghost" size="md" className="border border-border" onClick={bulkMove}>
+                폴더 이동
+              </Button>
+              <Button variant="danger" size="md" onClick={bulkDelete}>
+                삭제
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </main>
