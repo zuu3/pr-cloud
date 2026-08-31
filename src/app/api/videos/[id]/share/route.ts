@@ -9,6 +9,26 @@ import { logAudit } from "@/lib/audit";
 type Ctx = { params: Promise<{ id: string }> };
 const schema = z.object({ expiresAt: z.string().datetime().optional() });
 
+export async function GET(_request: Request, { params }: Ctx) {
+  return handle(async () => {
+    await requireUser();
+    const { id } = await params;
+    const rows = await prisma.shareLink.findMany({
+      where: { videoId: id, revokedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, token: true, expiresAt: true, createdAt: true },
+    });
+    const links = rows.map((r) => ({
+      id: r.id,
+      url: `${env.NEXTAUTH_URL}/s/${r.token}`,
+      expiresAt: r.expiresAt?.toISOString() ?? null,
+      expired: r.expiresAt ? r.expiresAt < new Date() : false,
+      createdAt: r.createdAt.toISOString(),
+    }));
+    return json({ links });
+  });
+}
+
 export async function POST(request: Request, { params }: Ctx) {
   return handle(async () => {
     const user = await requireUser();

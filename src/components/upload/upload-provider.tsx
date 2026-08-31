@@ -25,6 +25,7 @@ export type UploadItem = {
 type Ctx = {
   items: UploadItem[];
   addFiles: (files: File[] | FileList, folderId?: string) => void;
+  removeItem: (id: string) => void;
   clearFinished: () => void;
   activeCount: number;
 };
@@ -91,6 +92,9 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       if (file) upsert(file.id, { status: "error" });
       toastRef.current.show("업로드에 실패했어요", "err");
     });
+    u.on("file-removed", (file) => {
+      if (file) setItems((list) => list.filter((x) => x.id !== file.id));
+    });
     return u;
   }, []);
 
@@ -101,9 +105,27 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       for (const f of Array.from(files)) {
         try {
           uppy.addFile({ name: f.name, type: f.type, data: f, meta: { folderId: folderId ?? "" } });
-        } catch {
-          toastRef.current.show(`${f.name}은(는) 영상 파일이 아니에요`, "err");
+        } catch (e) {
+          const msg = String((e as Error)?.message ?? "");
+          if (/already added|noDuplicates/i.test(msg)) {
+            toastRef.current.show(`${f.name}은(는) 이미 목록에 있어요`, "err");
+          } else if (/allowedFileTypes|not an allowed/i.test(msg)) {
+            toastRef.current.show(`${f.name}은(는) 영상 파일이 아니에요`, "err");
+          } else {
+            toastRef.current.show(`${f.name}을(를) 추가하지 못했어요`, "err");
+          }
         }
+      }
+    },
+    [uppy],
+  );
+
+  const removeItem = useCallback(
+    (id: string) => {
+      try {
+        uppy.removeFile(id);
+      } catch {
+        setItems((list) => list.filter((x) => x.id !== id));
       }
     },
     [uppy],
@@ -119,7 +141,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   ).length;
 
   return (
-    <UploadCtx.Provider value={{ items, addFiles, clearFinished, activeCount }}>
+    <UploadCtx.Provider value={{ items, addFiles, removeItem, clearFinished, activeCount }}>
       {children}
     </UploadCtx.Provider>
   );

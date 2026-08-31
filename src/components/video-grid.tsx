@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FolderMenu } from "@/components/folder-menu";
 import { FolderPicker } from "@/components/folder-picker";
+import { MAX_FOLDER_DEPTH } from "@/lib/folders";
 import { IconFolder, IconFilm, IconPlay, IconCheck } from "@/components/ui/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -48,7 +49,31 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [selMode, setSelMode] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [dropTarget, setDropTarget] = useState<string | null>(null); // folderId | "" (root)
   const first = useRef(true);
+
+  function onCardDragStart(e: React.DragEvent, videoId: string) {
+    const ids = sel.has(videoId) && sel.size > 0 ? [...sel] : [videoId];
+    e.dataTransfer.setData("text/video-ids", JSON.stringify(ids));
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function onFolderDrop(e: React.DragEvent, folderId: string) {
+    e.preventDefault();
+    setDropTarget(null);
+    const raw = e.dataTransfer.getData("text/video-ids");
+    if (!raw) return;
+    const ids = JSON.parse(raw) as string[];
+    if (ids.length === 0) return;
+    bulkM.mutate({ action: "move", folderId: folderId || null, ids });
+  }
+  const dropProps = (folderId: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDropTarget(folderId);
+    },
+    onDragLeave: () => setDropTarget((t) => (t === folderId ? null : t)),
+    onDrop: (e: React.DragEvent) => onFolderDrop(e, folderId),
+  });
 
   const allFolders = useMemo(() => folders, [folders]);
 
@@ -215,7 +240,13 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     <main className="mx-auto max-w-[1120px] px-6 py-10 pb-24 sm:py-12">
       {currentFolder && (
         <nav className="mb-2 flex flex-wrap items-center gap-1.5 text-[13px] text-muted">
-          <Link href="/" className="shrink-0 hover:text-body">
+          <Link
+            href="/"
+            {...dropProps("")}
+            className={`shrink-0 rounded-md px-1 hover:text-body ${
+              dropTarget === "" ? "bg-weak-bg text-weak-fg ring-1 ring-primary" : ""
+            }`}
+          >
             보관함
           </Link>
           {trail.map((f, i) => (
@@ -226,7 +257,10 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               ) : (
                 <Link
                   href={`/?folderId=${f.id}`}
-                  className="max-w-[24vw] truncate hover:text-body"
+                  {...dropProps(f.id)}
+                  className={`max-w-[24vw] truncate rounded-md px-1 hover:text-body ${
+                    dropTarget === f.id ? "bg-weak-bg text-weak-fg ring-1 ring-primary" : ""
+                  }`}
                 >
                   {f.name}
                 </Link>
@@ -291,18 +325,23 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             key={f.id}
             href={`/?folderId=${f.id}`}
             title={f.name}
-            className="inline-flex max-w-[200px] items-center gap-1.5 rounded-xl bg-weak-bg px-3.5 py-2 text-[13px] font-medium text-weak-fg transition-transform hover:-translate-y-0.5"
+            {...dropProps(f.id)}
+            className={`inline-flex max-w-[200px] items-center gap-1.5 rounded-xl bg-weak-bg px-3.5 py-2 text-[13px] font-medium text-weak-fg transition-all hover:-translate-y-0.5 ${
+              dropTarget === f.id ? "ring-2 ring-primary ring-offset-1" : ""
+            }`}
           >
             <IconFolder className="size-4 shrink-0" />
             <span className="truncate">{f.name}</span>
           </Link>
         ))}
-        <button
-          onClick={newFolder}
-          className="rounded-xl border border-dashed border-border px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:border-primary hover:text-primary"
-        >
-          + 새 폴더
-        </button>
+        {trail.length < MAX_FOLDER_DEPTH && (
+          <button
+            onClick={newFolder}
+            className="rounded-xl border border-dashed border-border px-3.5 py-2 text-[13px] font-medium text-muted transition-colors hover:border-primary hover:text-primary"
+          >
+            + 새 폴더
+          </button>
+        )}
         <Link
           href="/trash"
           className="ml-auto rounded-xl px-3 py-2 text-[13px] text-muted hover:bg-surface hover:text-body"
@@ -339,6 +378,8 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               <Link
                 key={v.id}
                 href={`/v/${v.id}`}
+                draggable
+                onDragStart={(e) => onCardDragStart(e, v.id)}
                 onClick={(e) => {
                   if (selMode) {
                     e.preventDefault();
@@ -408,10 +449,16 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           <div className="mx-auto flex max-w-[1120px] items-center gap-3 px-6 py-3">
             <span className="text-[14px] font-semibold text-foreground">{sel.size}개 선택</span>
             <button
-              onClick={() => setSel(new Set(videos.map((v) => v.id)))}
+              onClick={() =>
+                setSel(
+                  sel.size === videos.length
+                    ? new Set()
+                    : new Set(videos.map((v) => v.id)),
+                )
+              }
               className="text-[13px] text-muted hover:text-body"
             >
-              전체 선택
+              {sel.size === videos.length ? "전체 해제" : "전체 선택"}
             </button>
             <div className="ml-auto flex gap-2">
               <Button

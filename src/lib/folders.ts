@@ -1,5 +1,20 @@
 export type FolderNode = { id: string; name: string; parentId: string | null };
 
+/** 보관함 > 1 > 2 > 3 */
+export const MAX_FOLDER_DEPTH = 3;
+
+/** depth of a folder within the tree (root folder = 1). */
+export function depthOf(folders: FolderNode[], id: string): number {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  let d = 0;
+  let cur: FolderNode | undefined = byId.get(id);
+  while (cur && d < 50) {
+    d++;
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return d;
+}
+
 /** "테스트 / 테스트 내부 테스트" — full path label for a folder. */
 export function folderPath(folders: FolderNode[], id: string): string {
   const byId = new Map(folders.map((f) => [f.id, f]));
