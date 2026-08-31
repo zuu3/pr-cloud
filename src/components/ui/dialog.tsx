@@ -3,7 +3,14 @@
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { Button } from "./button";
 
-type PromptOpts = { title: string; label?: string; initial?: string; confirmText?: string };
+type PromptOpts = {
+  title: string;
+  label?: string;
+  initial?: string;
+  confirmText?: string;
+  /** when set, renders a <select> instead of a text input; resolves the chosen value ("" allowed) */
+  options?: { value: string; label: string }[];
+};
 type ConfirmOpts = { title: string; body?: string; confirmText?: string; danger?: boolean };
 
 type Ctx = {
@@ -27,6 +34,12 @@ type State =
 export function DialogProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<State>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const selectRef = useRef<HTMLSelectElement>(null);
+
+  const promptValue = () =>
+    state?.kind === "prompt" && state.opts.options
+      ? (selectRef.current?.value ?? null)
+      : inputRef.current?.value.trim() || null;
 
   const confirm = useCallback(
     (opts: ConfirmOpts) =>
@@ -70,16 +83,31 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                 {state.opts.label && (
                   <label className="text-[13px] text-muted">{state.opts.label}</label>
                 )}
-                <input
-                  ref={inputRef}
-                  autoFocus
-                  defaultValue={state.opts.initial ?? ""}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") close(inputRef.current?.value.trim() || null);
-                    if (e.key === "Escape") close(null);
-                  }}
-                  className="mt-1 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-[15px] outline-none focus:border-primary focus:bg-canvas"
-                />
+                {state.opts.options ? (
+                  <select
+                    ref={selectRef}
+                    autoFocus
+                    defaultValue={state.opts.initial ?? state.opts.options[0]?.value ?? ""}
+                    className="mt-1 h-11 w-full rounded-xl border border-border bg-surface px-3 text-[15px] outline-none focus:border-primary focus:bg-canvas"
+                  >
+                    {state.opts.options.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    ref={inputRef}
+                    autoFocus
+                    defaultValue={state.opts.initial ?? ""}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") close(promptValue());
+                      if (e.key === "Escape") close(null);
+                    }}
+                    className="mt-1 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-[15px] outline-none focus:border-primary focus:bg-canvas"
+                  />
+                )}
               </div>
             )}
 
@@ -94,13 +122,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
               <Button
                 variant={state.kind === "confirm" && state.opts.danger ? "danger" : "primary"}
                 size="md"
-                onClick={() =>
-                  close(
-                    state.kind === "confirm"
-                      ? true
-                      : inputRef.current?.value.trim() || null,
-                  )
-                }
+                onClick={() => close(state.kind === "confirm" ? true : promptValue())}
               >
                 {state.opts.confirmText ?? (state.kind === "confirm" ? "확인" : "저장")}
               </Button>
