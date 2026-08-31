@@ -17,7 +17,7 @@ const schema = z.object({
   PRESIGN_PUT_TTL: z.coerce.number().int().positive().default(900),
   PRESIGN_PART_TTL: z.coerce.number().int().positive().default(3600),
   PRESIGN_GET_TTL: z.coerce.number().int().positive().default(21600),
-  SINGLE_PUT_MAX_BYTES: z.coerce.number().int().positive().default(94371840),
+  SINGLE_PUT_MAX_BYTES: z.coerce.number().int().positive().default(83886080),
   // optional storage budget shown on the admin dashboard (e.g. 5TB = 5497558138880)
   STORAGE_QUOTA_BYTES: z.preprocess(
     (v) => (v === "" || v == null ? undefined : v),
