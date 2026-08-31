@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Button } from "./button";
 
 type PromptOpts = {
@@ -62,17 +63,27 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   return (
     <DialogCtx.Provider value={{ confirm, prompt }}>
       {children}
-      {state && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 px-6"
-          onClick={() => close(state.kind === "confirm" ? false : null)}
-        >
-          <div
-            role="dialog"
-            aria-modal
-            className="w-full max-w-[360px] rounded-2xl bg-canvas p-5 shadow-[0_16px_48px_-12px_rgba(25,31,40,0.3)]"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {state && (
+          <motion.div
+            key="dialog-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 px-6"
+            onClick={() => close(state.kind === "confirm" ? false : null)}
           >
+            <motion.div
+              role="dialog"
+              aria-modal
+              initial={{ opacity: 0, scale: 0.94, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ type: "spring", stiffness: 420, damping: 32 }}
+              className="w-full max-w-[360px] rounded-2xl bg-canvas p-5 shadow-[0_16px_48px_-12px_rgba(25,31,40,0.3)]"
+              onClick={(e) => e.stopPropagation()}
+            >
             <h2 className="text-[17px] font-bold text-foreground">{state.opts.title}</h2>
 
             {state.kind === "confirm" && state.opts.body && (
@@ -129,9 +140,10 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                 {state.opts.confirmText ?? (state.kind === "confirm" ? "확인" : "저장")}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </DialogCtx.Provider>
   );
 }

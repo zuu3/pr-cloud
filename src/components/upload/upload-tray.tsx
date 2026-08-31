@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "motion/react";
 import { useUpload } from "./upload-provider";
 import { humanSize } from "@/lib/format";
 import { IconChevronDown } from "@/components/ui/icons";
@@ -9,8 +10,6 @@ import { IconChevronDown } from "@/components/ui/icons";
 export function UploadTray() {
   const { items, removeItem, clearFinished, activeCount } = useUpload();
   const [open, setOpen] = useState(true);
-
-  if (items.length === 0) return null;
 
   const done = items.filter((i) => i.status === "done").length;
   const err = items.filter((i) => i.status === "error").length;
@@ -22,7 +21,15 @@ export function UploadTray() {
         : `${done}개 업로드 완료`;
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-canvas shadow-[0_16px_48px_-12px_rgba(25,31,40,0.3)]">
+    <AnimatePresence>
+      {items.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, x: 32, y: 8 }}
+          animate={{ opacity: 1, x: 0, y: 0 }}
+          exit={{ opacity: 0, x: 32 }}
+          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+          className="fixed bottom-4 right-4 z-40 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-border bg-canvas shadow-[0_16px_48px_-12px_rgba(25,31,40,0.3)]"
+        >
       <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
         <span className="text-[13px] font-semibold text-foreground">{title}</span>
         <div className="ml-auto flex items-center gap-1">
@@ -97,6 +104,8 @@ export function UploadTray() {
           </Link>
         </div>
       )}
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
