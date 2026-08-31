@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth, signIn } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { IconFilm } from "@/components/ui/icons";
 
 export default async function LoginPage({
   searchParams,
@@ -14,8 +15,8 @@ export default async function LoginPage({
   return (
     <main className="grid min-h-screen place-items-center bg-canvas px-6">
       <div className="w-full max-w-[360px]">
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-weak-bg text-[22px]">
-          🎬
+        <div className="flex size-12 items-center justify-center rounded-2xl bg-weak-bg text-[22px] text-weak-fg">
+          <IconFilm />
         </div>
         <h1 className="mt-6 text-[30px] font-bold leading-[1.3] tracking-[-0.01em] text-foreground">
           홍보부 영상,

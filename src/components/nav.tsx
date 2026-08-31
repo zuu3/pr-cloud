@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { IconFilm } from "@/components/ui/icons";
 import { signOut } from "next-auth/react";
 
 export function Nav({ user }: { user: { email: string; role: "member" | "admin" } }) {
@@ -12,7 +13,7 @@ export function Nav({ user }: { user: { email: string; role: "member" | "admin" 
           href="/"
           className="mr-4 flex items-center gap-2 text-[16px] font-bold tracking-[-0.01em] text-foreground"
         >
-          <span className="text-[18px]">🎬</span>
+          <IconFilm className="size-[18px] text-primary" />
           홍보부 영상
         </Link>
 

@@ -20,7 +20,7 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
   const canManage = user.role === "admin" || video.uploadedBy === user.email;
   const [folders, poster] = await Promise.all([
     canManage
-      ? prisma.folder.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+      ? prisma.folder.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, parentId: true } })
       : Promise.resolve([]),
     video.thumbKey ? signGetUrl(video.thumbKey, { disposition: "inline" }) : Promise.resolve(null),
   ]);

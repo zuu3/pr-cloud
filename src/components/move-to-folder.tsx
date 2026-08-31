@@ -3,11 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Select } from "@/components/ui/select";
+import { FolderPicker } from "@/components/folder-picker";
 import { apiFetch } from "@/components/providers";
 import { useToast } from "@/components/ui/toast";
-
-type Folder = { id: string; name: string };
+import type { FolderNode } from "@/lib/folders";
 
 export function MoveToFolder({
   videoId,
@@ -15,7 +14,7 @@ export function MoveToFolder({
   current,
 }: {
   videoId: string;
-  folders: Folder[];
+  folders: FolderNode[];
   current: string | null;
 }) {
   const router = useRouter();
@@ -45,22 +44,15 @@ export function MoveToFolder({
   });
 
   return (
-    <label className="flex items-center gap-2 text-[13px] font-medium text-body">
-      폴더
-      <Select
-        aria-label="폴더 선택"
+    <div className="flex items-center gap-2">
+      <span className="shrink-0 text-[13px] font-medium text-body">폴더</span>
+      <FolderPicker
+        folders={folders}
         value={value}
         disabled={moveM.isPending}
-        onChange={(e) => moveM.mutate(e.target.value)}
-        className="h-10 text-[14px]"
-      >
-        <option value="">보관함 루트</option>
-        {folders.map((f) => (
-          <option key={f.id} value={f.id}>
-            {f.name}
-          </option>
-        ))}
-      </Select>
-    </label>
+        onChange={(id) => moveM.mutate(id)}
+        className="w-[260px] max-w-full"
+      />
+    </div>
   );
 }
