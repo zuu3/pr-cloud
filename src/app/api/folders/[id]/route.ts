@@ -5,7 +5,7 @@ import { handle, json, HttpError } from "@/lib/http";
 import { logAudit } from "@/lib/audit";
 
 type Ctx = { params: Promise<{ id: string }> };
-const renameSchema = z.object({ name: z.string().min(1).max(120) });
+const renameSchema = z.object({ name: z.string().min(1).max(20) });
 
 export async function PATCH(request: Request, { params }: Ctx) {
   return handle(async () => {

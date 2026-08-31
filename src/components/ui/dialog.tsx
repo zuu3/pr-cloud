@@ -8,6 +8,7 @@ type PromptOpts = {
   label?: string;
   initial?: string;
   confirmText?: string;
+  maxLength?: number;
   /** when set, renders a <select> instead of a text input; resolves the chosen value ("" allowed) */
   options?: { value: string; label: string }[];
 };
@@ -100,6 +101,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                   <input
                     ref={inputRef}
                     autoFocus
+                    maxLength={state.opts.maxLength}
                     defaultValue={state.opts.initial ?? ""}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") close(promptValue());

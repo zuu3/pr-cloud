@@ -16,7 +16,7 @@ export async function GET() {
 }
 
 const schema = z.object({
-  name: z.string().min(1).max(120),
+  name: z.string().min(1).max(20),
   parentId: z.string().uuid().optional(),
 });
 

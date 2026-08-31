@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { humanSize, humanDuration } from "@/lib/format";
@@ -36,9 +37,7 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
 
   return (
     <main className="mx-auto max-w-[860px] px-6 py-8 sm:py-10">
-      <Link href="/" className="text-[13px] text-muted hover:text-body">
-        ← 보관함
-      </Link>
+      <BackLink />
 
       <EditableMeta
         videoId={video.id}
