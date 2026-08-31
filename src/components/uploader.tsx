@@ -69,20 +69,34 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
     }
     const files = await screenDupes(picked);
     if (!files) return;
+
+    const base = folderId || null;
+    const baseDepth = base ? depthOf(folders, base) : 0;
+    const budget = Math.max(0, MAX_FOLDER_DEPTH - baseDepth); // folders we can still nest
+
+    const segsOf = (f: File) => {
+      const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+      const s = rel.split("/");
+      s.pop();
+      return s;
+    };
+    const deepCount = files.filter((f) => segsOf(f).length > budget).length;
+    if (deepCount > 0) {
+      const ok = await dialog.confirm({
+        title: `폴더가 ${MAX_FOLDER_DEPTH}단계보다 깊어요`,
+        body: `${deepCount}개 영상이 ${MAX_FOLDER_DEPTH}단계 아래에 있어요. 더 깊은 폴더 이름을 파일명 앞에 붙여서 올릴까요? 취소하면 폴더를 정리한 뒤 다시 고를 수 있어요.`,
+        confirmText: "파일명에 붙여서 올리기",
+      });
+      if (!ok) return;
+    }
+
     setPreparing(true);
     try {
-      const base = folderId || null;
-      const baseDepth = base ? depthOf(folders, base) : 0;
-      const budget = Math.max(0, MAX_FOLDER_DEPTH - baseDepth); // folders we can still nest
-
       const cache = new Map<string, string>(); // kept-path -> folderId
       const items: { file: File; folderId: string; name?: string }[] = [];
-      let flattened = 0;
 
       for (const f of files) {
-        const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
-        const segs = rel.split("/");
-        segs.pop(); // filename
+        const segs = segsOf(f);
         const keep = segs.slice(0, budget);
         const extra = segs.slice(budget);
         const key = keep.join("/");
@@ -104,16 +118,10 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
         }
 
         const name = extra.length ? `${extra.join("_")}_${f.name}` : undefined;
-        if (name) flattened++;
         items.push({ file: f, folderId: fid ?? "", name });
       }
 
       addFilesWithFolders(items);
-      if (flattened > 0) {
-        toast.show(
-          `폴더가 ${MAX_FOLDER_DEPTH}단계보다 깊어서 ${flattened}개는 하위 폴더 이름을 파일명 앞에 붙여 올렸어요.`,
-        );
-      }
     } finally {
       setPreparing(false);
     }
