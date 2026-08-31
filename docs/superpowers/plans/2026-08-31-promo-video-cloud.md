@@ -6,12 +6,14 @@
 
 **Architecture:** Next.js(App Router) 단일 앱. 앱 서버는 파일 바이트를 통과시키지 않고 presigned URL만 발급하는 "티켓 발급기". 파일은 브라우저 ↔ RGW 직결. 메타데이터는 Trove PostgreSQL. Docker로 Nova VM 배포.
 
-**Tech Stack:** Next.js 15 · TypeScript · Auth.js v5 (Google) · Prisma + PostgreSQL 15 · `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` · Uppy (`@uppy/core`, `@uppy/react`, `@uppy/dashboard`, `@uppy/aws-s3`) · Tailwind · Vitest + Testcontainers (Postgres, MinIO) · Playwright
+**Tech Stack:** Next.js 15 · TypeScript · Auth.js v5 (Google) · Prisma + PostgreSQL 15 · `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` · Uppy (`@uppy/core`, `@uppy/react`, `@uppy/dashboard`, `@uppy/aws-s3`) · Tailwind · Vitest (PGlite + in-process S3 stub, no Docker) · Playwright
 
 ## Global Constraints
 
-- Node 20 LTS. `package.json` `"engines": { "node": ">=20 <21" }`.
+- Node >= 20. `package.json` `"engines": { "node": ">=20" }`.
 - Next.js `output: "standalone"`.
+- **테스트는 로컬 Docker를 쓰지 않는다.** `npm test` = 100% 인프로세스: DB는 PGlite(`@electric-sql/pglite` + `@prisma/adapter-pglite`, Prisma `previewFeatures=["driverAdapters"]`), S3는 `node:http` 인메모리 더블(`test/helpers/s3-stub.ts`). e2e(Playwright)만 실제 Postgres 필요 → CI 전용(GitHub Actions `services: postgres`), 로컬 실행은 선택.
+- `Dockerfile`/`docker-compose.yml` 은 **배포 전용** (Nova VM). 로컬 테스트와 무관.
 - 앱 서버는 영상 바이트를 프록시하지 않는다. 모든 파일 전송은 presigned URL로 브라우저↔RGW 직결. (프록시 폴백은 별도 계획, 이 계획 범위 밖.)
 - S3 클라이언트 2개 분리: `s3External`(host `S3_ENDPOINT_EXTERNAL`, presigned URL 서명 전용) / `s3Internal`(host `S3_ENDPOINT_INTERNAL`, 서버측 Head/List/Complete/Abort/CreateMultipartUpload 호출).
 - 모든 S3 config: `region: S3_REGION`, `forcePathStyle: true`, `signatureVersion` v4 (SDK v3 기본).
@@ -26,6 +28,16 @@
   Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_01Eq1RVHTU8b7wWdVjFTacY2
   ```
+
+## Design direction
+
+**oh-my-design (OMD) `DESIGN.md` 를 단일 소스로 사용.** Task 0에서 Toss 레퍼런스 기반
+프로젝트 `DESIGN.md` 를 repo root에 생성. 모든 UI Task(16~20)는 그 파일의
+타이포/컬러/스페이싱/보이스/금지패턴을 따른다. 컴포넌트 라이브러리 없음 — Tailwind 유틸리티만.
+- Tailwind config 의 색/폰트/radius 토큰은 `DESIGN.md` 값으로 채운다 (임의값 금지).
+- 마이크로카피 한국어, `DESIGN.md` 보이스 가이드 준수.
+- Google Drive식 조밀한 파일 테이블 지양 — 카드 그리드.
+- 다크모드 v1 제외.
 
 ## File Structure
 
@@ -44,9 +56,11 @@
 | `src/app/(app)/**` | 로그인 필요 페이지 (shell, list, upload, detail, admin). |
 | `src/app/login/page.tsx` | 로그인. |
 | `src/app/s/[token]/page.tsx` + `src/app/s/[token]/url/route.ts` | 공유 페이지 + presigned redirect. |
-| `test/helpers/pg.ts` | Testcontainers Postgres + migrate. |
-| `test/helpers/minio.ts` | Testcontainers MinIO + 버킷 생성. |
+| `test/helpers/pg.ts` | PGlite 인프로세스 Postgres + 마이그레이션 SQL 적용. `startTestDb()`. |
+| `test/helpers/s3-stub.ts` | `node:http` 인메모리 S3 더블. `startS3()` (기존 `startMinio` 대체 — import 이름만 교체). |
 | `test/helpers/req.ts` | route handler 호출용 `Request` 빌더 + mock 세션. |
+| `DESIGN.md` | OMD 생성 (Task 0). UI 작업의 디자인 소스. |
+| `.github/workflows/ci.yml` | test(인프로세스) + build + e2e(postgres 서비스) 잡. |
 | `Dockerfile`, `docker-compose.yml`, `docker/entrypoint.sh` | 배포. |
 | `scripts/setup-bucket.ts` | 버킷 생성 + CORS + lifecycle 적용. |
 | `e2e/upload.spec.ts` | Playwright happy-path. |
@@ -54,6 +68,37 @@
 ---
 
 ## Phase 0 — Scaffold & tooling
+
+### Task 0: oh-my-design DESIGN.md (Toss reference)
+
+**Files:**
+- Create: `DESIGN.md` (repo root, via OMD)
+
+**Interfaces:**
+- Produces: `DESIGN.md` — Toss 기반 프로젝트 디자인 시스템 (타이포 스케일, 컬러 토큰, radius/spacing, 보이스 가이드, 금지 패턴). Task 16~20의 유일한 디자인 소스.
+
+- [ ] **Step 1: OMD 스킬 설치**
+
+```bash
+npx oh-my-design-cli@latest install-skills --agent claude-code --all
+npx oh-my-design-cli@latest doctor
+```
+Expected: `omd:*` 스킬이 `.claude/skills/` (or 글로벌)에 설치됨.
+
+- [ ] **Step 2: 프로젝트 DESIGN.md 생성**
+
+`omd:init` 실행. 프롬프트: "영상 저장/공유 웹앱(홍보부 내부용). Toss를 레퍼런스로. 검증된 레퍼런스 사실만 유지, 제품 특유 결정은 먼저 질문." → 카탈로그에서 Toss 추천 확인 → `DESIGN.md` repo root에 기록.
+
+- [ ] **Step 3: 확인**
+
+`DESIGN.md` 에 최소: primary 색 HEX, 폰트 패밀리, 타이포 스케일, radius 값, 버튼/입력 스펙, 보이스 원칙, 금지 패턴이 있는지 육안 확인. 없으면 `omd:init` 재실행하거나 수동 보완.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add DESIGN.md .claude
+git commit -m "chore: add Toss-based DESIGN.md via oh-my-design"
+```
 
 ### Task 1: Next.js + TS + Tailwind + Vitest scaffold
 
@@ -90,9 +135,12 @@ Then edit `package.json`: add `"engines": { "node": ">=20 <21" }`, add scripts:
 - [ ] **Step 2: Add deps**
 
 ```bash
-npm i @aws-sdk/client-s3 @aws-sdk/s3-request-presigner next-auth@beta @auth/prisma-adapter @prisma/client zod nanoid
-npm i -D vitest @vitejs/plugin-react vite-tsconfig-paths prisma @testcontainers/postgresql testcontainers @playwright/test @testing-library/react @testing-library/dom jsdom
+npm i @aws-sdk/client-s3 @aws-sdk/s3-request-presigner next-auth@beta @auth/prisma-adapter @prisma/client @prisma/adapter-pglite @electric-sql/pglite zod nanoid
+npm i -D vitest @vitejs/plugin-react vite-tsconfig-paths prisma tsx @playwright/test @testing-library/react @testing-library/dom jsdom
 ```
+
+`prisma/schema.prisma` generator 에 `previewFeatures = ["driverAdapters"]` 추가 (Task 2에서 스키마 작성 시 포함).
+`package.json` `"engines": { "node": ">=20" }`.
 
 - [ ] **Step 3: `next.config.ts` + `vitest.config.ts`**
 
@@ -237,13 +285,13 @@ git commit -m "chore: scaffold Next.js app + env validation"
 **Interfaces:**
 - Consumes: `env.DATABASE_URL` from Task 1.
 - Produces: `src/lib/db.ts` → `export const prisma: PrismaClient`.
-- Produces: `test/helpers/pg.ts` → `export async function startTestDb(): Promise<{ prisma: PrismaClient; url: string; stop: () => Promise<void> }>` (Testcontainers Postgres 15, `prisma migrate deploy` 적용 완료 상태로 반환).
+- Produces: `test/helpers/pg.ts` → `export async function startTestDb(): Promise<{ prisma: PrismaClient; url: string; stop: () => Promise<void> }>` (PGlite 인프로세스 Postgres, 마이그레이션 SQL 파일 순차 적용 완료 상태로 반환).
 - Produces (models): `User { email PK, role, status, name?, googleSub?, createdAt }`, `Folder { id, name, parentId?, createdBy?, createdAt }`, `Video { id, folderId?, title, description?, s3Key unique, sizeBytes?, contentType?, originalFilename, status, durationSec?, thumbKey?, uploadedBy?, createdAt, updatedAt }`, `Upload { videoId PK, s3UploadId, partSize, partsJson Json, createdAt }`, `ShareLink { id, token unique, videoId, expiresAt?, createdBy?, createdAt, revokedAt? }`, `AuditLog { id BigInt autoincrement, actorEmail?, action, targetId?, at }`.
 
 - [ ] **Step 1: Write `prisma/schema.prisma`**
 
 ```prisma
-generator client { provider = "prisma-client-js" }
+generator client { provider = "prisma-client-js"; previewFeatures = ["driverAdapters"] }
 datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
 
 enum Role { member admin }
@@ -338,25 +386,36 @@ export const prisma = g.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== "production") g.prisma = prisma;
 ```
 
-- [ ] **Step 4: `test/helpers/pg.ts`**
+- [ ] **Step 4: `test/helpers/pg.ts`** (PGlite, no Docker)
 
 ```ts
-import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { PGlite } from "@electric-sql/pglite";
+import { PrismaPGlite } from "@prisma/adapter-pglite";
 import { PrismaClient } from "@prisma/client";
-import { execSync } from "node:child_process";
+
+const MIGRATIONS_DIR = join(process.cwd(), "prisma", "migrations");
 
 export async function startTestDb() {
-  const container = await new PostgreSqlContainer("postgres:15-alpine").start();
-  const url = container.getConnectionUri();
-  execSync("npx prisma migrate deploy", { env: { ...process.env, DATABASE_URL: url }, stdio: "inherit" });
-  const prisma = new PrismaClient({ datasources: { db: { url } } });
+  const pg = new PGlite(); // in-memory, per-call isolated
+  const dirs = readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .sort();
+  for (const d of dirs) {
+    const sql = readFileSync(join(MIGRATIONS_DIR, d, "migration.sql"), "utf8");
+    await pg.exec(sql);
+  }
+  const prisma = new PrismaClient({ adapter: new PrismaPGlite(pg) });
   return {
     prisma,
-    url,
-    stop: async () => { await prisma.$disconnect(); await container.stop(); },
+    stop: async () => { await prisma.$disconnect(); await pg.close(); },
   };
 }
 ```
+
+Note: integration tests call `startTestDb()` and `vi.doMock("../../src/lib/db", () => ({ prisma: db.prisma }))` — unchanged. `db.url` 반환 없음(테스트에서 미사용).
 
 - [ ] **Step 5: Write the failing test**
 
@@ -408,7 +467,7 @@ git commit -m "feat: prisma schema + test db helper"
 ### Task 3: S3 clients + presign helpers
 
 **Files:**
-- Create: `src/lib/s3.ts`, `test/helpers/minio.ts`
+- Create: `src/lib/s3.ts`, `test/helpers/s3-stub.ts`
 - Test: `test/s3.test.ts`
 
 **Interfaces:**
@@ -420,54 +479,153 @@ git commit -m "feat: prisma schema + test db helper"
   - `export function signPutUrl(key: string, contentType: string, ttl?: number): Promise<string>`
   - `export function signGetUrl(key: string, opts?: { disposition?: "inline" | "attachment"; filename?: string; ttl?: number }): Promise<string>`
   - `export function signUploadPartUrl(key: string, uploadId: string, partNumber: number, ttl?: number): Promise<string>`
-- Produces: `test/helpers/minio.ts` → `export async function startMinio(): Promise<{ endpoint: string; accessKey: string; secretKey: string; bucket: string; stop: () => Promise<void> }>` (MinIO 컨테이너 + `promo-video` 버킷 생성 + CORS 허용).
+- Produces: `test/helpers/s3-stub.ts` → `export async function startS3(bucket?): Promise<{ endpoint: string; accessKey: string; secretKey: string; bucket: string; stop: () => Promise<void> }>` (node:http 인메모리 S3 더블, `promo-video` 버킷 사전 등록).
 
-- [ ] **Step 1: `test/helpers/minio.ts`**
+- [ ] **Step 1: `test/helpers/s3-stub.ts`** (in-process `node:http` S3 double, no Docker)
+
+순수 Node HTTP 서버. AWS SDK v3 (path-style, `forcePathStyle:true`) 요청을 받아 메모리 Map에 저장.
+서명 검증 안 함 (라우트 wiring 검증이 목적; 실제 RGW SigV4 확인은 배포 런북 6.7).
+
+구현할 op (path-style: `/{bucket}/{key...}` 또는 `/{bucket}?...`):
+- `PUT /{bucket}/{key}` (쿼리에 `partNumber`+`uploadId` 없을 때) → 오브젝트 저장. `ETag` 헤더 = `"` + md5(body) hex + `"`.
+- `GET /{bucket}/{key}` → 200 전체 또는 `Range: bytes=a-b` → 206 + `Content-Range` + 슬라이스. 없으면 404 (`<Error><Code>NoSuchKey</Code></Error>`).
+- `HEAD /{bucket}/{key}` → 200 + `Content-Length`. 없으면 404.
+- `HEAD /{bucket}` → 버킷 존재하면 200, 아니면 404.
+- `DELETE /{bucket}/{key}` → 204, 오브젝트 삭제.
+- `POST /{bucket}/{key}?uploads` → `CreateMultipartUpload`. `uploadId` 발급(랜덤). XML `<InitiateMultipartUploadResult><Bucket/><Key/><UploadId/></...>`.
+- `PUT /{bucket}/{key}?partNumber=N&uploadId=U` → 파트 body 저장(`U` 별 Map<N, Buffer>). `ETag` 헤더 반환.
+- `GET /{bucket}/{key}?uploadId=U` → `ListParts`. XML `<ListPartsResult>` + 각 `<Part><PartNumber/><ETag/><Size/></Part>`.
+- `POST /{bucket}/{key}?uploadId=U` (body = CompleteMultipartUpload XML) → 파트를 PartNumber 순 concat → 오브젝트 저장 → Map<U> 삭제. XML `<CompleteMultipartUploadResult><Location/><Bucket/><Key/><ETag/></...>`.
+- `DELETE /{bucket}/{key}?uploadId=U` → `AbortMultipartUpload`. Map<U> 삭제. 204.
+- `PUT /{bucket}?cors` → body(XML) 저장. `GET /{bucket}?cors` → 저장된 XML 반환 (`GetBucketCorsCommand` 파싱용). 없으면 404 `NoSuchCORSConfiguration`.
+- `PUT /{bucket}?lifecycle` → 200 (내용 무시).
+- `PUT /{bucket}` (create bucket) → 200, 버킷 등록.
 
 ```ts
-import { GenericContainer, Wait } from "testcontainers";
-import { S3Client, CreateBucketCommand, PutBucketCorsCommand } from "@aws-sdk/client-s3";
+import { createServer } from "node:http";
+import { createHash } from "node:crypto";
+import type { AddressInfo } from "node:net";
 
-export async function startMinio() {
-  const container = await new GenericContainer("minio/minio:RELEASE.2024-06-13T22-53-53Z")
-    .withEnvironment({ MINIO_ROOT_USER: "minioadmin", MINIO_ROOT_PASSWORD: "minioadmin" })
-    .withCommand(["server", "/data"])
-    .withExposedPorts(9000)
-    .withWaitStrategy(Wait.forHttp("/minio/health/ready", 9000))
-    .start();
-  const endpoint = `http://${container.getHost()}:${container.getMappedPort(9000)}`;
-  const bucket = "promo-video";
-  const c = new S3Client({
-    endpoint, region: "us-east-1", forcePathStyle: true,
-    credentials: { accessKeyId: "minioadmin", secretAccessKey: "minioadmin" },
+type Store = {
+  buckets: Set<string>;
+  objects: Map<string, Buffer>;                 // `${bucket}/${key}` -> body
+  mpu: Map<string, Map<number, Buffer>>;        // uploadId -> parts
+  mpuKey: Map<string, string>;                  // uploadId -> `${bucket}/${key}`
+  cors: Map<string, string>;                    // bucket -> raw xml
+};
+
+function md5(b: Buffer) { return createHash("md5").update(b).digest("hex"); }
+function xml(s: string) { return `<?xml version="1.0" encoding="UTF-8"?>${s}`; }
+
+export async function startS3(bucket = "promo-video") {
+  const store: Store = { buckets: new Set([bucket]), objects: new Map(), mpu: new Map(), mpuKey: new Map(), cors: new Map() };
+
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      const body = Buffer.concat(chunks);
+      const u = new URL(req.url!, "http://s3.local");
+      const parts = u.pathname.replace(/^\//, "").split("/");
+      const bkt = parts.shift()!;
+      const key = decodeURIComponent(parts.join("/"));
+      const q = u.searchParams;
+      const send = (code: number, payload = "", headers: Record<string, string> = {}) => {
+        res.writeHead(code, headers); res.end(payload);
+      };
+      const okXml = (s: string, code = 200, h: Record<string, string> = {}) =>
+        send(code, xml(s), { "content-type": "application/xml", ...h });
+
+      // bucket-level
+      if (!key) {
+        if (req.method === "PUT" && q.has("cors")) { store.cors.set(bkt, body.toString()); return send(200); }
+        if (req.method === "GET" && q.has("cors")) {
+          const c = store.cors.get(bkt);
+          return c ? okXml(c.replace(/^<\?xml[^>]*\?>/, "")) : okXml(`<Error><Code>NoSuchCORSConfiguration</Code></Error>`, 404);
+        }
+        if (req.method === "PUT" && q.has("lifecycle")) return send(200);
+        if (req.method === "PUT") { store.buckets.add(bkt); return send(200); }
+        if (req.method === "HEAD") return send(store.buckets.has(bkt) ? 200 : 404);
+        return send(404);
+      }
+      const oKey = `${bkt}/${key}`;
+
+      // multipart
+      if (req.method === "POST" && q.has("uploads")) {
+        const uploadId = "mpu-" + Math.random().toString(36).slice(2);
+        store.mpu.set(uploadId, new Map()); store.mpuKey.set(uploadId, oKey);
+        return okXml(`<InitiateMultipartUploadResult><Bucket>${bkt}</Bucket><Key>${key}</Key><UploadId>${uploadId}</UploadId></InitiateMultipartUploadResult>`);
+      }
+      if (req.method === "PUT" && q.has("partNumber") && q.has("uploadId")) {
+        const m = store.mpu.get(q.get("uploadId")!); if (!m) return send(404);
+        m.set(Number(q.get("partNumber")), body);
+        return send(200, "", { ETag: `"${md5(body)}"` });
+      }
+      if (req.method === "GET" && q.has("uploadId")) {
+        const m = store.mpu.get(q.get("uploadId")!); if (!m) return send(404);
+        const rows = [...m.entries()].sort((a, b) => a[0] - b[0])
+          .map(([n, b]) => `<Part><PartNumber>${n}</PartNumber><ETag>"${md5(b)}"</ETag><Size>${b.length}</Size></Part>`).join("");
+        return okXml(`<ListPartsResult><Bucket>${bkt}</Bucket><Key>${key}</Key>${rows}</ListPartsResult>`);
+      }
+      if (req.method === "POST" && q.has("uploadId")) {
+        const id = q.get("uploadId")!; const m = store.mpu.get(id); if (!m) return send(404);
+        const merged = Buffer.concat([...m.entries()].sort((a, b) => a[0] - b[0]).map(([, b]) => b));
+        store.objects.set(oKey, merged); store.mpu.delete(id); store.mpuKey.delete(id);
+        return okXml(`<CompleteMultipartUploadResult><Location>http://s3.local/${oKey}</Location><Bucket>${bkt}</Bucket><Key>${key}</Key><ETag>"${md5(merged)}"</ETag></CompleteMultipartUploadResult>`);
+      }
+      if (req.method === "DELETE" && q.has("uploadId")) {
+        store.mpu.delete(q.get("uploadId")!); return send(204);
+      }
+
+      // single object
+      if (req.method === "PUT") { store.objects.set(oKey, body); return send(200, "", { ETag: `"${md5(body)}"` }); }
+      if (req.method === "DELETE") { store.objects.delete(oKey); return send(204); }
+      if (req.method === "HEAD") {
+        const o = store.objects.get(oKey);
+        return o ? send(200, "", { "content-length": String(o.length) }) : send(404);
+      }
+      if (req.method === "GET") {
+        const o = store.objects.get(oKey);
+        if (!o) return okXml(`<Error><Code>NoSuchKey</Code></Error>`, 404);
+        const range = req.headers.range?.match(/bytes=(\d+)-(\d*)/);
+        if (range) {
+          const start = Number(range[1]); const end = range[2] ? Number(range[2]) : o.length - 1;
+          const slice = o.subarray(start, end + 1);
+          return send(206, slice.toString("binary"), {
+            "content-range": `bytes ${start}-${end}/${o.length}`, "content-length": String(slice.length),
+          });
+        }
+        return send(200, o.toString("binary"), { "content-length": String(o.length) });
+      }
+      send(400);
+    });
   });
-  await c.send(new CreateBucketCommand({ Bucket: bucket }));
-  await c.send(new PutBucketCorsCommand({
-    Bucket: bucket,
-    CORSConfiguration: { CORSRules: [{
-      AllowedOrigins: ["*"], AllowedMethods: ["GET", "PUT"],
-      AllowedHeaders: ["*"], ExposeHeaders: ["ETag"], MaxAgeSeconds: 3000,
-    }] },
-  }));
+
+  await new Promise<void>((r) => server.listen(0, r));
+  const port = (server.address() as AddressInfo).port;
   return {
-    endpoint, accessKey: "minioadmin", secretKey: "minioadmin", bucket,
-    stop: () => container.stop().then(() => undefined),
+    endpoint: `http://127.0.0.1:${port}`,
+    accessKey: "test", secretKey: "test", bucket,
+    stop: () => new Promise<void>((r) => server.close(() => r())),
   };
 }
 ```
+
+Note: 기존 통합 테스트들의 `import { startMinio } from "../helpers/minio"` → `import { startS3 } from "../helpers/s3-stub"` 로, 호출 `startS3()` → `startS3()` 로 교체 (Tasks 10, 11, 13, 14, 15, 21, 23). 반환 shape 동일(`endpoint/accessKey/secretKey/bucket/stop`).
+바이너리 응답을 `toString("binary")` 로 보내므로 텍스트 픽스처면 충분. e2e의 실제 영상 바이트는 CI의 실제 Postgres + 이 stub 대신 실제 MinIO 서비스로 검증(Task 24).
 
 - [ ] **Step 2: Write the failing test**
 
 `test/s3.test.ts`:
 ```ts
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { startMinio } from "./helpers/minio";
+import { startS3 } from "./helpers/s3-stub";
 
-let m: Awaited<ReturnType<typeof startMinio>>;
+let m: Awaited<ReturnType<typeof startS3>>;
 let s3: typeof import("../src/lib/s3");
 
 beforeAll(async () => {
-  m = await startMinio();
+  m = await startS3();
   process.env.S3_ENDPOINT_EXTERNAL = m.endpoint;
   process.env.S3_ENDPOINT_INTERNAL = m.endpoint;
   process.env.S3_REGION = "us-east-1";
@@ -1403,15 +1561,15 @@ git add -A && git commit -m "feat: upload lib (part math, ownership guard)"
 ```ts
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { startTestDb } from "../helpers/pg";
-import { startMinio } from "../helpers/minio";
+import { startS3 } from "../helpers/s3-stub";
 import { mockSession, req, jbody } from "../helpers/req";
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
-let m: Awaited<ReturnType<typeof startMinio>>;
+let m: Awaited<ReturnType<typeof startS3>>;
 
 beforeAll(async () => {
   db = await startTestDb();
-  m = await startMinio();
+  m = await startS3();
   Object.assign(process.env, {
     S3_ENDPOINT_EXTERNAL: m.endpoint, S3_ENDPOINT_INTERNAL: m.endpoint,
     S3_REGION: "us-east-1", S3_BUCKET: m.bucket,
@@ -1578,15 +1736,15 @@ git add -A && git commit -m "feat: single-PUT upload API (create + complete)"
 ```ts
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { startTestDb } from "../helpers/pg";
-import { startMinio } from "../helpers/minio";
+import { startS3 } from "../helpers/s3-stub";
 import { mockSession, req, jbody } from "../helpers/req";
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
-let m: Awaited<ReturnType<typeof startMinio>>;
+let m: Awaited<ReturnType<typeof startS3>>;
 
 beforeAll(async () => {
   db = await startTestDb();
-  m = await startMinio();
+  m = await startS3();
   Object.assign(process.env, {
     S3_ENDPOINT_EXTERNAL: m.endpoint, S3_ENDPOINT_INTERNAL: m.endpoint,
     S3_REGION: "us-east-1", S3_BUCKET: m.bucket,
@@ -1948,13 +2106,13 @@ git add -A && git commit -m "feat: folders API"
 ```ts
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { startTestDb } from "../helpers/pg";
-import { startMinio } from "../helpers/minio";
+import { startS3 } from "../helpers/s3-stub";
 import { mockSession, req } from "../helpers/req";
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
-let m: Awaited<ReturnType<typeof startMinio>>;
+let m: Awaited<ReturnType<typeof startS3>>;
 beforeAll(async () => {
-  db = await startTestDb(); m = await startMinio();
+  db = await startTestDb(); m = await startS3();
   Object.assign(process.env, {
     S3_ENDPOINT_EXTERNAL: m.endpoint, S3_ENDPOINT_INTERNAL: m.endpoint, S3_REGION: "us-east-1",
     S3_BUCKET: m.bucket, S3_ACCESS_KEY: m.accessKey, S3_SECRET_KEY: m.secretKey,
@@ -2094,13 +2252,13 @@ git add -A && git commit -m "feat: video list/search + delete API"
 ```ts
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { startTestDb } from "../helpers/pg";
-import { startMinio } from "../helpers/minio";
+import { startS3 } from "../helpers/s3-stub";
 import { mockSession, req } from "../helpers/req";
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
-let m: Awaited<ReturnType<typeof startMinio>>;
+let m: Awaited<ReturnType<typeof startS3>>;
 beforeAll(async () => {
-  db = await startTestDb(); m = await startMinio();
+  db = await startTestDb(); m = await startS3();
   Object.assign(process.env, {
     S3_ENDPOINT_EXTERNAL: m.endpoint, S3_ENDPOINT_INTERNAL: m.endpoint, S3_REGION: "us-east-1",
     S3_BUCKET: m.bucket, S3_ACCESS_KEY: m.accessKey, S3_SECRET_KEY: m.secretKey,
@@ -2181,13 +2339,13 @@ git add -A && git commit -m "feat: video play/download presigned URL API"
 ```ts
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { startTestDb } from "../helpers/pg";
-import { startMinio } from "../helpers/minio";
+import { startS3 } from "../helpers/s3-stub";
 import { mockSession, req, jbody } from "../helpers/req";
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
-let m: Awaited<ReturnType<typeof startMinio>>;
+let m: Awaited<ReturnType<typeof startS3>>;
 beforeAll(async () => {
-  db = await startTestDb(); m = await startMinio();
+  db = await startTestDb(); m = await startS3();
   Object.assign(process.env, {
     S3_ENDPOINT_EXTERNAL: m.endpoint, S3_ENDPOINT_INTERNAL: m.endpoint, S3_REGION: "us-east-1",
     S3_BUCKET: m.bucket, S3_ACCESS_KEY: m.accessKey, S3_SECRET_KEY: m.secretKey,
@@ -2933,13 +3091,13 @@ git add -A && git commit -m "feat: public share page"
 ```ts
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { startTestDb } from "../helpers/pg";
-import { startMinio } from "../helpers/minio";
+import { startS3 } from "../helpers/s3-stub";
 import { req } from "../helpers/req";
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
-let m: Awaited<ReturnType<typeof startMinio>>;
+let m: Awaited<ReturnType<typeof startS3>>;
 beforeAll(async () => {
-  db = await startTestDb(); m = await startMinio();
+  db = await startTestDb(); m = await startS3();
   Object.assign(process.env, {
     S3_ENDPOINT_EXTERNAL: m.endpoint, S3_ENDPOINT_INTERNAL: m.endpoint, S3_REGION: "us-east-1",
     S3_BUCKET: m.bucket, S3_ACCESS_KEY: m.accessKey, S3_SECRET_KEY: m.secretKey,
@@ -3159,12 +3317,12 @@ git add -A && git commit -m "chore: dockerfile, compose, migrate-on-start entryp
 `test/scripts/setup-bucket.test.ts`:
 ```ts
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { startMinio } from "../helpers/minio";
+import { startS3 } from "../helpers/s3-stub";
 import { GetBucketCorsCommand, S3Client } from "@aws-sdk/client-s3";
 
-let m: Awaited<ReturnType<typeof startMinio>>;
+let m: Awaited<ReturnType<typeof startS3>>;
 beforeAll(async () => {
-  m = await startMinio();
+  m = await startS3();
   Object.assign(process.env, {
     S3_ENDPOINT_EXTERNAL: m.endpoint, S3_ENDPOINT_INTERNAL: m.endpoint, S3_REGION: "us-east-1",
     S3_BUCKET: "fresh-bucket", S3_ACCESS_KEY: m.accessKey, S3_SECRET_KEY: m.secretKey,
