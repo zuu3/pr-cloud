@@ -20,11 +20,11 @@ export default async function SharedFolderVideo({
   return (
     <div className="min-h-screen bg-surface">
       <header className="border-b border-border bg-canvas">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-6 text-[15px] font-bold text-foreground">
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4 sm:px-6 text-[15px] font-bold text-foreground">
           홍보부 클라우드
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-6 py-8">
+      <main className="mx-auto max-w-3xl px-4 sm:px-6 py-8">
         <Link
           href={`/s/${token}`}
           className="inline-flex items-center gap-1 rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-[13px] text-body hover:border-primary hover:text-primary"

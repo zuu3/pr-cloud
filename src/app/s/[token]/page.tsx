@@ -9,11 +9,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-surface">
       <header className="border-b border-border bg-canvas">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-6 text-[15px] font-bold text-foreground">
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4 sm:px-6 text-[15px] font-bold text-foreground">
           홍보부 클라우드
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-3xl px-4 sm:px-6 py-8">{children}</main>
     </div>
   );
 }

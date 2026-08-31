@@ -159,14 +159,14 @@ export function UsersTable({ initial }: { initial: Row[] }) {
         </div>
       )}
 
-      <div className="mt-6 rounded-2xl border border-border">
-        <table className="w-full text-[14px]">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-border">
+        <table className="w-full min-w-[460px] text-[14px]">
           <thead>
             <tr className="rounded-t-2xl bg-surface text-left text-[12px] font-medium text-muted [&>th:first-child]:rounded-tl-2xl [&>th:last-child]:rounded-tr-2xl">
-              <th className="px-4 py-2.5">이메일</th>
-              <th className="px-4 py-2.5">상태</th>
-              <th className="px-4 py-2.5">권한</th>
-              <th className="px-4 py-2.5" />
+              <th className="px-3 py-2.5 sm:px-4">이메일</th>
+              <th className="px-3 py-2.5 sm:px-4">상태</th>
+              <th className="px-3 py-2.5 sm:px-4">권한</th>
+              <th className="px-3 py-2.5 sm:px-4" />
             </tr>
           </thead>
           <tbody>
@@ -174,8 +174,8 @@ export function UsersTable({ initial }: { initial: Row[] }) {
               const removing = removeM.isPending && removeM.variables === r.email;
               return (
                 <tr key={r.email} className={`border-t border-border ${removing ? "opacity-40" : ""}`}>
-                  <td className="px-4 py-3 font-medium text-foreground">{r.email}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3 sm:px-4 font-medium text-foreground">{r.email}</td>
+                  <td className="px-3 py-3 sm:px-4">
                     <span
                       className={`rounded-md px-2 py-0.5 text-[12px] font-medium ${
                         r.status === "active" ? "bg-weak-bg text-weak-fg" : "bg-surface text-muted"
@@ -184,7 +184,7 @@ export function UsersTable({ initial }: { initial: Row[] }) {
                       {r.status === "active" ? "활성" : "초대됨"}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3 sm:px-4">
                     <Dropdown
                       ariaLabel={`${r.email} 권한`}
                       value={r.role}
@@ -199,7 +199,7 @@ export function UsersTable({ initial }: { initial: Row[] }) {
                       className="w-28"
                     />
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-3 py-3 sm:px-4 text-right">
                     <button
                       onClick={() => remove(r)}
                       disabled={removing}

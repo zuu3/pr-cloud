@@ -94,7 +94,7 @@ export function TrashList({ initial }: { initial: Row[] }) {
         {rows.map((r) => (
           <div
             key={r.id}
-            className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0"
+            className="flex items-center gap-2 border-b border-border px-3 py-3 last:border-b-0 sm:gap-3 sm:px-4"
           >
             <div className="min-w-0 flex-1">
               <p className="truncate text-[14px] font-medium text-foreground">{r.title}</p>
@@ -108,14 +108,14 @@ export function TrashList({ initial }: { initial: Row[] }) {
             <button
               onClick={() => m.mutate({ action: "restore", ids: [r.id] })}
               disabled={m.isPending}
-              className="rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-weak-fg hover:bg-weak-bg disabled:opacity-40"
+              className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-weak-fg hover:bg-weak-bg disabled:opacity-40"
             >
               되살리기
             </button>
             <button
               onClick={() => purgeOne(r)}
               disabled={m.isPending}
-              className="rounded-lg px-2.5 py-1.5 text-[13px] text-danger hover:bg-[#fdecee] disabled:opacity-40"
+              className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] text-danger hover:bg-[#fdecee] disabled:opacity-40"
             >
               영구 삭제
             </button>

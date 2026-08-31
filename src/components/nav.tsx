@@ -7,7 +7,7 @@ import { signOut } from "next-auth/react";
 export function Nav({ user }: { user: { email: string; role: "member" | "admin" } }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-canvas/85 backdrop-blur-sm">
-      <div className="mx-auto flex h-14 max-w-[1120px] items-center gap-1 overflow-x-auto px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mx-auto flex h-14 max-w-[1120px] items-center gap-1 overflow-x-auto px-4 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <Link
           href="/"
           className="mr-2 flex shrink-0 items-center gap-2 text-[16px] font-bold tracking-[-0.01em] text-foreground sm:mr-4"
