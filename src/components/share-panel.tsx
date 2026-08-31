@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/components/providers";
 import { useToast } from "@/components/ui/toast";
@@ -13,11 +13,26 @@ const PRESETS = [
   ["30", "30일"],
 ] as const;
 
+type Link = {
+  id: string;
+  url: string;
+  expiresAt: string | null;
+  expired: boolean;
+  createdAt: string;
+};
+
 export function SharePanel({ videoId }: { videoId: string }) {
   const toast = useToast();
+  const qc = useQueryClient();
   const [days, setDays] = useState("0");
-  const [link, setLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const key = ["shares", videoId];
+  const { data } = useQuery<{ links: Link[] }>({
+    queryKey: key,
+    queryFn: () => apiFetch(`/api/videos/${videoId}/share`),
+  });
+  const links = data?.links ?? [];
 
   const createM = useMutation({
     mutationFn: () => {
@@ -29,16 +44,24 @@ export function SharePanel({ videoId }: { videoId: string }) {
         body: JSON.stringify(expiresAt ? { expiresAt } : {}),
       });
     },
-    onSuccess: (d) => setLink(d.url),
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
     onError: (e: Error) => toast.show(e.message, "err"),
   });
 
-  async function copy() {
-    if (!link) return;
-    await navigator.clipboard.writeText(link);
-    setCopied(true);
+  const revokeM = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/share/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      toast.show("링크를 해제했어요");
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
+  async function copy(link: Link) {
+    await navigator.clipboard.writeText(link.url);
+    setCopiedId(link.id);
     toast.show("링크를 복사했어요");
-    setTimeout(() => setCopied(false), 1500);
+    setTimeout(() => setCopiedId(null), 1500);
   }
 
   return (
@@ -71,19 +94,42 @@ export function SharePanel({ videoId }: { videoId: string }) {
         </Button>
       </div>
 
-      {link && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            readOnly
-            value={link}
-            aria-label="공유 링크"
-            onFocus={(e) => e.currentTarget.select()}
-            className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 text-[13px] text-body"
-          />
-          <Button onClick={copy} variant="ghost" size="md" className="border border-border">
-            {copied ? "복사했어요" : "복사"}
-          </Button>
-        </div>
+      {links.length > 0 && (
+        <ul className="mt-4 space-y-2">
+          {links.map((l) => (
+            <li key={l.id} className="rounded-xl border border-border p-3">
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={l.url}
+                  aria-label="공유 링크"
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface px-2.5 text-[12px] text-body"
+                />
+                <button
+                  onClick={() => copy(l)}
+                  className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[12px] text-body hover:border-primary"
+                >
+                  {copiedId === l.id ? "복사함" : "복사"}
+                </button>
+                <button
+                  onClick={() => revokeM.mutate(l.id)}
+                  disabled={revokeM.isPending}
+                  className="shrink-0 rounded-lg px-2 py-1.5 text-[12px] text-danger hover:bg-[#fdecee] disabled:opacity-50"
+                >
+                  해제
+                </button>
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted">
+                {l.expiresAt
+                  ? l.expired
+                    ? "만료됨"
+                    : `${new Date(l.expiresAt).toLocaleDateString("ko-KR")} 만료`
+                  : "만료 없음"}
+              </p>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

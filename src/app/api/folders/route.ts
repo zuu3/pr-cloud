@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { handle, json, HttpError } from "@/lib/http";
 import { logAudit } from "@/lib/audit";
+import { MAX_FOLDER_DEPTH } from "@/lib/folders";
 
 export async function GET() {
   return handle(async () => {
@@ -19,8 +20,6 @@ const schema = z.object({
   name: z.string().min(1).max(20),
   parentId: z.string().uuid().optional(),
 });
-
-export const MAX_FOLDER_DEPTH = 3; // 보관함 > 1 > 2 > 3
 
 async function depthOf(folderId: string): Promise<number> {
   let depth = 1;

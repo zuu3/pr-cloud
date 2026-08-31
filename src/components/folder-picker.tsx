@@ -57,7 +57,7 @@ export function FolderPicker({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-11 z-30 max-h-72 w-[min(320px,80vw)] overflow-auto rounded-xl border border-border bg-canvas p-1 shadow-[0_12px_32px_-8px_rgba(25,31,40,0.25)]">
+        <div className="absolute left-0 top-11 z-50 max-h-72 w-[min(320px,80vw)] overflow-auto rounded-xl border border-border bg-canvas p-1 shadow-[0_12px_32px_-8px_rgba(25,31,40,0.25)]">
           <Row label="보관함 루트" depth={0} selected={value === ""} onClick={() => pick("")} />
           {tree.map((f) => (
             <Row

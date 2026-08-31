@@ -7,7 +7,7 @@ import { humanSize } from "@/lib/format";
 import { IconChevronDown } from "@/components/ui/icons";
 
 export function UploadTray() {
-  const { items, clearFinished, activeCount } = useUpload();
+  const { items, removeItem, clearFinished, activeCount } = useUpload();
   const [open, setOpen] = useState(true);
 
   if (items.length === 0) return null;
@@ -66,6 +66,15 @@ export function UploadTray() {
                   {it.status === "done" && "완료"}
                   {it.status === "error" && "실패"}
                 </span>
+                {(it.status === "queued" || it.status === "uploading") && (
+                  <button
+                    onClick={() => removeItem(it.id)}
+                    aria-label="업로드 취소"
+                    className="grid size-5 shrink-0 place-items-center rounded-md text-muted hover:bg-surface hover:text-danger"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
               <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface">
                 <div

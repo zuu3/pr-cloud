@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { apiFetch } from "@/components/providers";
 import { useToast } from "@/components/ui/toast";
 
 export function EditableMeta({
@@ -21,22 +23,24 @@ export function EditableMeta({
   const [editing, setEditing] = useState(false);
   const [t, setT] = useState(title);
   const [d, setD] = useState(description ?? "");
-  const [busy, setBusy] = useState(false);
 
-  async function save() {
-    if (!t.trim()) return;
-    setBusy(true);
-    const res = await fetch(`/api/videos/${videoId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: t.trim(), description: d.trim() || null }),
-    });
-    setBusy(false);
-    if (res.ok) {
+  const saveM = useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/videos/${videoId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: t.trim(), description: d.trim() || null }),
+      }),
+    onSuccess: () => {
       setEditing(false);
       router.refresh();
       toast.show("저장했어요");
-    } else toast.show("저장하지 못했어요", "err");
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
+  function save() {
+    if (t.trim()) saveM.mutate();
   }
 
   if (editing) {
@@ -45,19 +49,21 @@ export function EditableMeta({
         <input
           value={t}
           onChange={(e) => setT(e.target.value)}
+          maxLength={200}
           aria-label="제목"
           className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-[20px] font-bold text-foreground outline-none focus:border-primary focus:bg-canvas"
         />
         <textarea
           value={d}
           onChange={(e) => setD(e.target.value)}
+          maxLength={2000}
           aria-label="설명"
           placeholder="설명 (선택)"
           rows={3}
           className="mt-2 w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-[14px] leading-[1.6] text-body outline-none focus:border-primary focus:bg-canvas"
         />
         <div className="mt-2 flex gap-2">
-          <Button onClick={save} size="md" loading={busy}>
+          <Button onClick={save} size="md" loading={saveM.isPending}>
             저장
           </Button>
           <Button
