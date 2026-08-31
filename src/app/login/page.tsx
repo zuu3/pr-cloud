@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { auth, signIn } from "@/lib/auth";
-import { Logo } from "@/components/ui/icons";
 
 function GoogleG() {
   return (
@@ -42,12 +41,8 @@ export default async function LoginPage({
       />
 
       <div className="relative w-full max-w-[380px] rounded-3xl border border-border bg-canvas p-8 shadow-[0_24px_64px_-24px_rgba(25,31,40,0.25)]">
-        <Logo className="size-11" />
-
-        <h1 className="mt-7 text-[27px] font-bold leading-[1.34] tracking-[-0.01em] text-foreground">
-          홍보부 영상,
-          <br />한곳에 모아요
-        </h1>
+        <h1 className="text-[26px] font-bold tracking-[-0.01em] text-foreground">홍보부 클라우드</h1>
+        <p className="mt-2 text-[14px] text-muted">촬영본을 모아두는 곳</p>
 
         {error && (
           <p className="mt-6 rounded-xl bg-[#fdecee] px-3.5 py-2.5 text-[13px] leading-[1.5] text-danger">
