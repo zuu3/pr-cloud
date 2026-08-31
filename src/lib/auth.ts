@@ -1,11 +1,26 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 import { prisma } from "./db";
 import { env } from "./env";
 import { HttpError } from "./http";
 
 export type SessionRole = "member" | "admin";
 export type SessionUser = { email: string; role: SessionRole; name: string | null };
+
+/** E2E-only password-less login. Never enabled in a normal build. */
+export const isE2EAuthEnabled = () => process.env.E2E_AUTH === "1";
+
+const e2eProvider = Credentials({
+  id: "e2e",
+  name: "e2e",
+  credentials: { email: {} },
+  authorize: async (c) => {
+    const email = String(c?.email ?? "");
+    const u = await prisma.user.findUnique({ where: { email } });
+    return u ? { id: email, email, name: u.name ?? email } : null;
+  },
+});
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: env.NEXTAUTH_SECRET,
@@ -17,9 +32,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: env.GOOGLE_CLIENT_SECRET,
       authorization: { params: { hd: env.GOOGLE_HD, prompt: "select_account" } },
     }),
+    ...(isE2EAuthEnabled() ? [e2eProvider] : []),
   ],
   callbacks: {
     async signIn({ account, profile }) {
+      if (isE2EAuthEnabled() && account?.provider === "e2e") return true;
       if (account?.provider !== "google" || !profile) return false;
       const p = profile as {
         hd?: string;
