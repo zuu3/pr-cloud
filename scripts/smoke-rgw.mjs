@@ -7,7 +7,16 @@
 //   S3_ACCESS_KEY=... S3_SECRET_KEY=... \
 //   node scripts/smoke-rgw.mjs
 
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const need = (k) => {
@@ -27,6 +36,9 @@ const s3 = new S3Client({
   endpoint,
   forcePathStyle: true,
   credentials: { accessKeyId: need("S3_ACCESS_KEY"), secretAccessKey: need("S3_SECRET_KEY") },
+  // Ceph RGW 403s on the checksum params AWS SDK v3 adds by default
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
 });
 
 const Key = `smoke/${Date.now()}-${Math.random().toString(36).slice(2)}.txt`;
@@ -51,19 +63,23 @@ try {
   putUrl = await getSignedUrl(
     s3,
     new PutObjectCommand({ Bucket, Key, ContentType: contentType }),
-    { expiresIn: 900 },
+    { expiresIn: 900, signableHeaders: new Set(["host", "content-type"]) },
   );
   ok(`presign PUT  ${putUrl.split("?")[0]}`);
 } catch (e) {
   fail("presign PUT", e);
 }
 
-// 2. upload via the presigned URL
+// 2. upload via the presigned URL.
+// NOTE: send a sized body (Blob) — RGW 403s on chunked transfer-encoding for
+// presigned PUT. Browsers upload File/Blob bodies, which always set
+// Content-Length, so this matches production. A raw string via fetch() would
+// be sent chunked and fail.
 try {
   const r = await fetch(putUrl, {
     method: "PUT",
     headers: { "content-type": contentType },
-    body,
+    body: new Blob([body]),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text().catch(() => "")}`);
   ok(`PUT upload   ETag ${r.headers.get("etag")}`);
@@ -83,7 +99,39 @@ try {
   fail("presign GET / download", e);
 }
 
-// 4. cleanup
+// 4. multipart round-trip (browser path for files > SINGLE_PUT_MAX_BYTES)
+const mpKey = `${Key}.mp`;
+try {
+  const create = await s3.send(
+    new CreateMultipartUploadCommand({ Bucket, Key: mpKey, ContentType: contentType }),
+  );
+  const part = Buffer.alloc(5 * 1024 * 1024, 7); // 5 MiB (min part size)
+  const partUrl = await getSignedUrl(
+    s3,
+    new UploadPartCommand({ Bucket, Key: mpKey, UploadId: create.UploadId, PartNumber: 1 }),
+    { expiresIn: 900 },
+  );
+  const pr = await fetch(partUrl, { method: "PUT", body: new Blob([part]) });
+  if (!pr.ok) throw new Error(`part PUT HTTP ${pr.status} ${await pr.text().catch(() => "")}`);
+  const etag = pr.headers.get("etag");
+  await s3.send(
+    new CompleteMultipartUploadCommand({
+      Bucket,
+      Key: mpKey,
+      UploadId: create.UploadId,
+      MultipartUpload: { Parts: [{ PartNumber: 1, ETag: etag }] },
+    }),
+  );
+  ok("multipart     create + presigned part PUT + complete");
+  await s3.send(new DeleteObjectCommand({ Bucket, Key: mpKey }));
+} catch (e) {
+  await s3
+    .send(new AbortMultipartUploadCommand({ Bucket, Key: mpKey }))
+    .catch(() => {});
+  fail("multipart round-trip", e);
+}
+
+// 5. cleanup
 try {
   await s3.send(new DeleteObjectCommand({ Bucket, Key }));
   ok("cleanup      deleted test object");
@@ -91,4 +139,4 @@ try {
   console.warn(`  warn cleanup failed (leftover object ${Key}): ${e?.message ?? e}`);
 }
 
-console.log("\nall good — SigV4 + path-style + bucket read/write work.");
+console.log("\nall good — SigV4 + path-style + single PUT + multipart all work.");
