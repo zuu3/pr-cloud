@@ -34,7 +34,14 @@ export async function handle(fn: () => Promise<Response>): Promise<Response> {
     return await fn();
   } catch (e) {
     if (isHttpError(e)) return json({ error: e.message }, e.status);
-    console.error("unhandled route error", e);
+    console.error(
+      JSON.stringify({
+        at: new Date().toISOString(),
+        level: "error",
+        msg: "unhandled route error",
+        err: e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : String(e),
+      }),
+    );
     return json({ error: "internal error" }, 500);
   }
 }
