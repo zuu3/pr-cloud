@@ -42,10 +42,17 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
 
     const dupeSet = new Set(dupes);
     const remaining = files.filter((f) => !dupeSet.has(f.name));
+
     if (remaining.length === 0) {
-      toast.show("이미 다 올라온 영상이에요", "err");
-      return null;
+      // every file already exists — let them force it, don't dead-end
+      const force = await dialog.confirm({
+        title: `이미 올라온 영상 ${dupeSet.size}개`,
+        body: "파일 이름과 용량이 같은 영상이 이미 보관함에 있어요. 그래도 다시 올릴까요?",
+        confirmText: "그래도 올리기",
+      });
+      return force ? files : null;
     }
+
     const ok = await dialog.confirm({
       title: `이미 올라온 영상 ${dupeSet.size}개`,
       body: `파일 이름과 용량이 같은 영상이 이미 있어요. 겹치는 건 빼고 ${remaining.length}개만 올릴까요?`,

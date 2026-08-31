@@ -58,4 +58,14 @@ describe("POST /api/uploads/check", () => {
     const { dupes } = await check([{ name: "old.mp4", size: 500 }]);
     expect(dupes).toEqual([]);
   });
+
+  it("ignores half-finished / failed uploads (retry not blocked)", async () => {
+    await mk("stuck.mp4", 700, { status: "uploading" });
+    await mk("dead.mp4", 700, { status: "failed" });
+    const { dupes } = await check([
+      { name: "stuck.mp4", size: 700 },
+      { name: "dead.mp4", size: 700 },
+    ]);
+    expect(dupes).toEqual([]);
+  });
 });

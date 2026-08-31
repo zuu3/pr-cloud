@@ -140,6 +140,23 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, folderId, sort, mine, days, router]);
 
+  async function reload() {
+    const res = await fetch(`/api/videos?${buildParams()}`);
+    if (res.ok) {
+      const page: Page = await res.json();
+      setVideos(page.videos);
+      setCursor(page.nextCursor);
+    }
+  }
+
+  // refetch when a background upload finishes
+  useEffect(() => {
+    const h = () => void reload();
+    window.addEventListener("upload:done", h);
+    return () => window.removeEventListener("upload:done", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, folderId, sort, mine, days]);
+
   async function loadMore() {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
