@@ -323,7 +323,10 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             {q ? "다른 제목으로 찾아보세요." : "첫 영상을 올려보세요."}
           </p>
           {!q && (
-            <Link href="/upload" className="mt-5">
+            <Link
+              href={folderId ? `/upload?folderId=${folderId}` : "/upload"}
+              className="mt-5"
+            >
               <Button size="md">영상 업로드</Button>
             </Link>
           )}
