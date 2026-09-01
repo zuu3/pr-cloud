@@ -35,6 +35,7 @@ type Folder = {
   name: string;
   parentId: string | null;
   coverThumbUrl?: string | null;
+  coverVideoId?: string | null;
 };
 type Page = { videos: Video[]; nextCursor: string | null };
 
@@ -69,6 +70,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [selMode, setSelMode] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [coverOpen, setCoverOpen] = useState(false);
   const [dropTarget, setDropTarget] = useState<string | null>(null); // folderId | "" (root)
   const [loadingMore, setLoadingMore] = useState(false);
   const first = useRef(true);
@@ -286,6 +288,21 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     onError: (e: Error) => toast.show(e.message, "err"),
   });
 
+  const coverM = useMutation({
+    mutationFn: (coverVideoId: string | null) =>
+      apiFetch(`/api/folders/${currentFolder!.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ coverVideoId }),
+      }),
+    onSuccess: (_d, coverVideoId) => {
+      router.refresh();
+      setCoverOpen(false);
+      toast.show(coverVideoId ? "커버 이미지를 바꿨어요" : "커버를 자동으로 되돌렸어요");
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
   const deleteFolderM = useMutation({
     mutationFn: () => apiFetch(`/api/folders/${currentFolder!.id}`, { method: "DELETE" }),
     onSuccess: () => {
@@ -400,6 +417,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           {currentFolder && (
             <FolderMenu
               onRename={renameFolder}
+              onCover={() => setCoverOpen(true)}
               onShare={() => setShareOpen(true)}
               onDownload={() => {
                 if (folderId) window.location.href = `/api/download/zip?folderId=${folderId}`;
@@ -844,6 +862,80 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             <SharePanel folderId={currentFolder.id} />
             <div className="mt-4 flex justify-end">
               <Button variant="ghost" size="md" onClick={() => setShareOpen(false)}>
+                닫기
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+      {coverOpen && currentFolder && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 px-6"
+          onClick={() => setCoverOpen(false)}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal
+            initial={{ opacity: 0, scale: 0.94, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ type: "spring", stiffness: 420, damping: 32 }}
+            className="flex max-h-[80vh] w-full max-w-[460px] flex-col rounded-2xl bg-canvas p-5 shadow-[0_16px_48px_-12px_rgba(25,31,40,0.3)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[17px] font-bold text-foreground">
+              '{currentFolder.name}' 커버 이미지
+            </h2>
+            <p className="mt-1 text-[13px] text-muted">이 폴더 영상 중 하나를 커버로 골라요.</p>
+
+            {videos.filter((v) => v.thumbUrl).length === 0 ? (
+              <p className="mt-6 text-center text-[13px] text-muted">
+                썸네일이 있는 영상이 없어요. 하위 폴더 영상이 자동으로 커버가 돼요.
+              </p>
+            ) : (
+              <div className="mt-3 grid grid-cols-3 gap-2 overflow-y-auto">
+                {videos
+                  .filter((v) => v.thumbUrl)
+                  .map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => coverM.mutate(v.id)}
+                      disabled={coverM.isPending}
+                      className={`relative overflow-hidden rounded-lg border transition-all disabled:opacity-50 ${
+                        currentFolder.coverVideoId === v.id
+                          ? "border-primary ring-2 ring-primary/30"
+                          : "border-border hover:border-primary"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={v.thumbUrl!}
+                        alt={v.title}
+                        className="aspect-video w-full object-cover"
+                        loading="lazy"
+                      />
+                    </button>
+                  ))}
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-between">
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={() => coverM.mutate(null)}
+                disabled={coverM.isPending || !currentFolder.coverVideoId}
+              >
+                자동으로
+              </Button>
+              <Button variant="ghost" size="md" onClick={() => setCoverOpen(false)}>
                 닫기
               </Button>
             </div>
