@@ -24,16 +24,22 @@
 
 ### A. bare-metal (systemd)
 
+디렉토리 구조: `/opt/promo/releases/<timestamp>/` 안에 각 릴리스, `/opt/promo/current`
+가 활성 릴리스로의 심링크. 배포 = 새 디렉토리에 풀고 심링크만 교체(원자적) — 실행
+중인 프로세스가 mmap한 파일 위에 덮어쓰지 않는다 (그러면 SIGBUS).
+
 ```sh
 # 1. node 22 + ffmpeg (Docker 불필요)
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs ffmpeg
 
-# 2. 번들 받기
-sudo mkdir -p /opt/promo
+# 2. 첫 릴리스
+REL=/opt/promo/releases/$(date +%Y%m%d-%H%M%S)
+sudo mkdir -p "$REL"
 curl -fsSL https://github.com/zuu3/pr-cloud/releases/download/bundle/promo-bundle.tar.gz \
-  | sudo tar -xz -C /opt/promo
+  | sudo tar -xz -C "$REL"
 sudo chown -R ubuntu:ubuntu /opt/promo
+sudo ln -sfn "$REL" /opt/promo/current
 
 # 3. env (deploy/promo.env.example 참고, 0600)
 sudo mkdir -p /etc/promo
@@ -41,20 +47,20 @@ sudo nano /etc/promo/promo.env
 sudo chmod 600 /etc/promo/promo.env
 
 # 4. systemd
-sudo cp /opt/promo/promo.service /etc/systemd/system/promo.service
+sudo cp /opt/promo/current/promo.service /etc/systemd/system/promo.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now promo
-sudo journalctl -u promo -f          # 마이그레이션 로그 + 기동 확인
+sudo journalctl -u promo -f
 curl -s localhost:8080/api/healthz    # {"ok":true}
 ```
 
-업데이트:
+업데이트 (원자적, 자동 롤백 가능):
 ```sh
-sudo systemctl stop promo
-curl -fsSL https://github.com/zuu3/pr-cloud/releases/download/bundle/promo-bundle.tar.gz \
-  | sudo tar -xz -C /opt/promo
-sudo chown -R ubuntu:ubuntu /opt/promo
-sudo systemctl start promo
+sudo bash /opt/promo/current/redeploy.sh
+```
+문제 생기면 이전 릴리스로:
+```sh
+sudo ln -sfn /opt/promo/releases/<이전> /opt/promo/current && sudo systemctl restart promo
 ```
 
 `server.js`는 `PORT`/`HOSTNAME` env를 따른다. `promo.service`가 `PORT=8080`으로

@@ -88,6 +88,7 @@ jobs:
           cp -r prisma dist/prisma
           cp -r node_modules/.prisma dist/node_modules/.prisma
           cp deploy/run.sh dist/run.sh && chmod +x dist/run.sh
+          cp deploy/redeploy.sh dist/redeploy.sh && chmod +x dist/redeploy.sh
           cp deploy/promo.service dist/promo.service
           # prisma CLI + full dep closure (effect / @prisma/config / @prisma/engines)
           mkdir -p /tmp/pc && (cd /tmp/pc && npm init -y >/dev/null && npm i --omit=dev --no-audit --no-fund prisma@6.19.3)
