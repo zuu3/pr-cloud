@@ -11,7 +11,13 @@ export async function GET() {
     await requireUser();
     const folders = await prisma.folder.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, parentId: true, coverVideoId: true },
+      select: {
+        id: true,
+        name: true,
+        parentId: true,
+        coverVideoId: true,
+        coverImageKey: true,
+      },
     });
 
     // thumbnailed, live videos — used both for the auto cover and to validate a
@@ -29,19 +35,24 @@ export async function GET() {
     const validThumb = new Set(vids.map((v) => v.id));
 
     const withCover = folders.map((f) => {
-      let coverId: string | null = null;
-      if (f.coverVideoId && validThumb.has(f.coverVideoId)) {
-        coverId = f.coverVideoId; // manual pick
+      // precedence: uploaded image > pinned video > auto (newest in subtree)
+      let coverThumbUrl: string | null = null;
+      if (f.coverImageKey) {
+        coverThumbUrl = `/api/folders/${f.id}/cover`;
+      } else if (f.coverVideoId && validThumb.has(f.coverVideoId)) {
+        coverThumbUrl = `/api/thumb/${f.coverVideoId}`;
       } else {
         const sub = new Set(subtreeIds(folders, f.id));
-        coverId = vids.find((v) => v.folderId && sub.has(v.folderId))?.id ?? null; // auto
+        const hit = vids.find((v) => v.folderId && sub.has(v.folderId));
+        coverThumbUrl = hit ? `/api/thumb/${hit.id}` : null;
       }
       return {
         id: f.id,
         name: f.name,
         parentId: f.parentId,
         coverVideoId: f.coverVideoId,
-        coverThumbUrl: coverId ? `/api/thumb/${coverId}` : null,
+        coverImageKey: f.coverImageKey,
+        coverThumbUrl,
       };
     });
     return json({ folders: withCover });
