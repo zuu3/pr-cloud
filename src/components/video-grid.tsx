@@ -7,7 +7,7 @@ import { FolderPicker } from "@/components/folder-picker";
 import { SharePanel } from "@/components/share-panel";
 import { Dropdown } from "@/components/ui/dropdown";
 import { MAX_FOLDER_DEPTH } from "@/lib/folders";
-import { IconFolder, IconFilm, IconPlay, IconCheck } from "@/components/ui/icons";
+import { IconFolder, IconFilm, IconPlay, IconCheck, IconGrid, IconList } from "@/components/ui/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
@@ -74,6 +74,24 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const first = useRef(true);
   const searchRef = useRef<HTMLInputElement>(null);
   const animateCards = useRef(true); // stagger only on first mount, not on refetch
+  const [view, setView] = useState<"grid" | "list">("grid");
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("videoView");
+      if (v === "list" || v === "grid") setView(v);
+    } catch {
+      /* no storage */
+    }
+  }, []);
+  const setViewPref = (v: "grid" | "list") => {
+    setView(v);
+    try {
+      localStorage.setItem("videoView", v);
+    } catch {
+      /* no storage */
+    }
+  };
 
   function onCardDragStart(e: React.DragEvent, videoId: string) {
     const ids = sel.has(videoId) && sel.size > 0 ? [...sel] : [videoId];
@@ -405,6 +423,30 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
               {selMode ? "취소" : "선택"}
             </button>
           )}
+          {videos.length > 0 && (
+            <div className="flex h-10 shrink-0 items-center rounded-xl border border-border p-0.5">
+              <button
+                onClick={() => setViewPref("grid")}
+                aria-label="카드 보기"
+                aria-pressed={view === "grid"}
+                className={`grid h-full w-8 place-items-center rounded-[8px] transition-colors ${
+                  view === "grid" ? "bg-weak-bg text-weak-fg" : "text-muted hover:text-body"
+                }`}
+              >
+                <IconGrid className="size-4" />
+              </button>
+              <button
+                onClick={() => setViewPref("list")}
+                aria-label="리스트 보기"
+                aria-pressed={view === "list"}
+                className={`grid h-full w-8 place-items-center rounded-[8px] transition-colors ${
+                  view === "list" ? "bg-weak-bg text-weak-fg" : "text-muted hover:text-body"
+                }`}
+              >
+                <IconList className="size-4" />
+              </button>
+            </div>
+          )}
           <Dropdown
             ariaLabel="정렬"
             value={sort}
@@ -513,9 +555,82 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           )}
         </div>
       ) : (
-        <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          className={
+            view === "grid"
+              ? "mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+              : "mt-6 flex flex-col divide-y divide-border overflow-hidden rounded-2xl border border-border"
+          }
+        >
           {videos.map((v, i) => {
             const checked = sel.has(v.id);
+
+            if (view === "list") {
+              return (
+                <motion.div
+                  key={v.id}
+                  initial={animateCards.current ? { opacity: 0 } : false}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.2, delay: Math.min(i, 14) * 0.015 }}
+                >
+                  <Link
+                    href={`/v/${v.id}`}
+                    draggable
+                    onDragStart={(e) => onCardDragStart(e, v.id)}
+                    onClick={(e) => {
+                      if (selMode) {
+                        e.preventDefault();
+                        toggleAt(i, e.shiftKey);
+                      }
+                    }}
+                    className={`group flex items-center gap-3 px-3 py-2.5 transition-colors ${
+                      checked ? "bg-weak-bg" : "bg-canvas hover:bg-surface"
+                    }`}
+                  >
+                    {selMode && (
+                      <span
+                        className={`grid size-5 shrink-0 place-items-center rounded-full border text-[12px] ${
+                          checked
+                            ? "border-primary bg-primary text-white"
+                            : "border-border text-transparent"
+                        }`}
+                      >
+                        <IconCheck className="size-3" />
+                      </span>
+                    )}
+                    <div className="relative h-11 w-[74px] shrink-0 overflow-hidden rounded-md bg-surface">
+                      {v.thumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={v.thumbUrl}
+                          alt=""
+                          className="size-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="grid size-full place-items-center text-[16px] text-muted/40">
+                          <IconPlay />
+                        </div>
+                      )}
+                      {v.playableInBrowser === false && (
+                        <span className="absolute inset-x-0 bottom-0 bg-foreground/80 text-center text-[9px] font-medium text-white">
+                          DL
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-medium text-foreground">{v.title}</p>
+                      <p className="mt-0.5 truncate text-[12px] text-muted">
+                        {humanSize(v.sizeBytes)} · 조회 {v.viewCount}
+                        {v.durationSec != null ? ` · ${humanDuration(v.durationSec)}` : ""} ·{" "}
+                        {new Date(v.createdAt).toLocaleDateString("ko-KR")}
+                      </p>
+                    </div>
+                  </Link>
+                </motion.div>
+              );
+            }
+
             return (
               <motion.div
                 key={v.id}
