@@ -14,6 +14,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   const toastRef = useRef(toast);
   toastRef.current = toast;
   const rate = useRef<Map<string, { bytes: number; ts: number; ema: number }>>(new Map());
+  const lastEmit = useRef<Map<string, number>>(new Map()); // throttle setItems per file
 
   const uppyRef = useRef<UppyType | null>(null);
   const initRef = useRef<Promise<UppyType> | null>(null);
@@ -52,6 +53,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
       u.on("file-added", (file) => {
         rate.current.delete(file.id);
+        lastEmit.current.delete(file.id);
         setItems((list) => [
           ...list,
           {
@@ -91,6 +93,12 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         } else {
           rate.current.set(file.id, { bytes: prog.bytesUploaded, ts: now, ema: 0 });
         }
+        // rate math ran every event above; throttle the React update to ~4/s
+        const nowMs = Date.now();
+        const done = prog.bytesUploaded >= prog.bytesTotal;
+        if (!done && nowMs - (lastEmit.current.get(file.id) ?? 0) < 250) return;
+        lastEmit.current.set(file.id, nowMs);
+
         const remaining = prog.bytesTotal - prog.bytesUploaded;
         upsert(file.id, {
           status: "uploading",
@@ -103,6 +111,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       u.on("upload-success", async (file) => {
         if (!file) return;
         rate.current.delete(file.id);
+        lastEmit.current.delete(file.id);
         const videoId = file.meta?.videoId as string | undefined;
         if (videoId && !a.shouldUseMultipart({ size: file.size ?? 0 })) {
           try {
@@ -130,6 +139,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       u.on("file-removed", (file) => {
         if (file) {
           rate.current.delete(file.id);
+          lastEmit.current.delete(file.id);
           setItems((list) => list.filter((x) => x.id !== file.id));
         }
       });

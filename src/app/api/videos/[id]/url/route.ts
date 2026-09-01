@@ -18,11 +18,7 @@ export async function GET(request: Request, { params }: Ctx) {
     if (!video || video.deletedAt) throw new HttpError(404, "not found");
     if (video.status !== "ready") throw new HttpError(409, "not ready");
 
-    if (disposition === "inline") {
-      prisma.video
-        .update({ where: { id }, data: { viewCount: { increment: 1 } } })
-        .catch(() => {});
-    }
+    // view counting lives on the detail page load, not here
 
     const url = await signGetUrl(video.s3Key, {
       disposition,
