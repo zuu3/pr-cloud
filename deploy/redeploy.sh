@@ -27,6 +27,6 @@ sleep 12
 systemctl is-active promo
 curl -fsS http://localhost:8080/api/healthz && echo
 
-# keep the last 3 releases
-ls -1dt "$ROOT"/releases/*/ | tail -n +4 | xargs -r rm -rf
+# keep the last 2 releases (6.8G root disk on the VM is tight)
+ls -1dt "$ROOT"/releases/*/ | tail -n +3 | xargs -r rm -rf
 echo "done. releases:"; ls -1dt "$ROOT"/releases/*/
