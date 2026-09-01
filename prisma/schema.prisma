@@ -46,6 +46,7 @@ model Folder {
   createdAt    DateTime    @default(now())
   coverVideoId String?
   coverVideo   Video?      @relation("FolderCover", fields: [coverVideoId], references: [id], onDelete: SetNull)
+  coverImageKey String?
   videos       Video[]
   shareLinks   ShareLink[]
 }

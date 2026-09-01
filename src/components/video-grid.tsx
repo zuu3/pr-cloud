@@ -36,6 +36,7 @@ type Folder = {
   parentId: string | null;
   coverThumbUrl?: string | null;
   coverVideoId?: string | null;
+  coverImageKey?: string | null;
 };
 type Page = { videos: Video[]; nextCursor: string | null };
 
@@ -71,6 +72,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [moveOpen, setMoveOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
+  const [coverTab, setCoverTab] = useState<"video" | "upload">("video");
   const [dropTarget, setDropTarget] = useState<string | null>(null); // folderId | "" (root)
   const [loadingMore, setLoadingMore] = useState(false);
   const first = useRef(true);
@@ -299,6 +301,24 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       router.refresh();
       setCoverOpen(false);
       toast.show(coverVideoId ? "커버 이미지를 바꿨어요" : "커버를 자동으로 되돌렸어요");
+    },
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
+  const coverUpM = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/folders/${currentFolder!.id}/cover`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "업로드 실패");
+    },
+    onSuccess: () => {
+      router.refresh();
+      setCoverOpen(false);
+      toast.show("커버 이미지를 올렸어요");
     },
     onError: (e: Error) => toast.show(e.message, "err"),
   });
@@ -893,36 +913,80 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             <h2 className="text-[17px] font-bold text-foreground">
               '{currentFolder.name}' 커버 이미지
             </h2>
-            <p className="mt-1 text-[13px] text-muted">이 폴더 영상 중 하나를 커버로 골라요.</p>
 
-            {videos.filter((v) => v.thumbUrl).length === 0 ? (
-              <p className="mt-6 text-center text-[13px] text-muted">
-                썸네일이 있는 영상이 없어요. 하위 폴더 영상이 자동으로 커버가 돼요.
-              </p>
+            <div className="mt-3 flex gap-1 rounded-xl border border-border p-0.5 text-[13px] font-medium">
+              <button
+                onClick={() => setCoverTab("video")}
+                className={`flex-1 rounded-[9px] py-1.5 transition-colors ${
+                  coverTab === "video" ? "bg-weak-bg text-weak-fg" : "text-muted hover:text-body"
+                }`}
+              >
+                영상에서 고르기
+              </button>
+              <button
+                onClick={() => setCoverTab("upload")}
+                className={`flex-1 rounded-[9px] py-1.5 transition-colors ${
+                  coverTab === "upload" ? "bg-weak-bg text-weak-fg" : "text-muted hover:text-body"
+                }`}
+              >
+                직접 올리기
+              </button>
+            </div>
+
+            {coverTab === "video" ? (
+              videos.filter((v) => v.thumbUrl).length === 0 ? (
+                <p className="mt-6 text-center text-[13px] text-muted">
+                  썸네일이 있는 영상이 없어요. 하위 폴더 영상이 자동으로 커버가 돼요.
+                </p>
+              ) : (
+                <div className="mt-3 grid grid-cols-3 gap-2 overflow-y-auto">
+                  {videos
+                    .filter((v) => v.thumbUrl)
+                    .map((v) => (
+                      <button
+                        key={v.id}
+                        onClick={() => coverM.mutate(v.id)}
+                        disabled={coverM.isPending}
+                        className={`relative overflow-hidden rounded-lg border transition-all disabled:opacity-50 ${
+                          currentFolder.coverVideoId === v.id
+                            ? "border-primary ring-2 ring-primary/30"
+                            : "border-border hover:border-primary"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={v.thumbUrl!}
+                          alt={v.title}
+                          className="aspect-video w-full object-cover"
+                          loading="lazy"
+                        />
+                      </button>
+                    ))}
+                </div>
+              )
             ) : (
-              <div className="mt-3 grid grid-cols-3 gap-2 overflow-y-auto">
-                {videos
-                  .filter((v) => v.thumbUrl)
-                  .map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => coverM.mutate(v.id)}
-                      disabled={coverM.isPending}
-                      className={`relative overflow-hidden rounded-lg border transition-all disabled:opacity-50 ${
-                        currentFolder.coverVideoId === v.id
-                          ? "border-primary ring-2 ring-primary/30"
-                          : "border-border hover:border-primary"
-                      }`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={v.thumbUrl!}
-                        alt={v.title}
-                        className="aspect-video w-full object-cover"
-                        loading="lazy"
-                      />
-                    </button>
-                  ))}
+              <div className="mt-4">
+                <label className="grid cursor-pointer place-items-center rounded-xl border-2 border-dashed border-border bg-surface px-4 py-10 text-center text-[13px] text-muted transition-colors hover:border-primary">
+                  {coverUpM.isPending
+                    ? "올리는 중…"
+                    : "이미지 파일 선택 (jpg · png · webp · gif, 5MB 이하)"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    hidden
+                    disabled={coverUpM.isPending}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) coverUpM.mutate(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {currentFolder.coverImageKey && (
+                  <p className="mt-2 text-[12px] text-muted">
+                    지금 커스텀 이미지가 커버예요. 새로 올리면 교체돼요.
+                  </p>
+                )}
               </div>
             )}
 
@@ -931,7 +995,10 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                 variant="ghost"
                 size="md"
                 onClick={() => coverM.mutate(null)}
-                disabled={coverM.isPending || !currentFolder.coverVideoId}
+                disabled={
+                  coverM.isPending ||
+                  (!currentFolder.coverVideoId && !currentFolder.coverImageKey)
+                }
               >
                 자동으로
               </Button>

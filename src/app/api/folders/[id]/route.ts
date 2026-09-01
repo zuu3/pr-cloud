@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { handle, json, HttpError } from "@/lib/http";
+import { s3Internal, BUCKET } from "@/lib/s3";
 import { logAudit } from "@/lib/audit";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -54,10 +56,17 @@ export async function PATCH(request: Request, { params }: Ctx) {
     const folder = await prisma.folder.findUnique({ where: { id } });
     if (!folder) throw new HttpError(404, "not found");
 
-    const data: { name?: string; coverVideoId?: string | null } = {};
+    const data: { name?: string; coverVideoId?: string | null; coverImageKey?: string | null } = {};
     if (b.data.name !== undefined) data.name = b.data.name;
 
     if (b.data.coverVideoId !== undefined) {
+      // picking a video (or clearing) also drops any uploaded cover image
+      if (folder.coverImageKey) {
+        await s3Internal
+          .send(new DeleteObjectCommand({ Bucket: BUCKET, Key: folder.coverImageKey }))
+          .catch(() => {});
+        data.coverImageKey = null;
+      }
       if (b.data.coverVideoId === null) {
         data.coverVideoId = null; // back to auto
       } else {
