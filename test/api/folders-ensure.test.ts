@@ -43,21 +43,20 @@ describe("POST /api/folders/ensure", () => {
     expect(await db.prisma.folder.count()).toBe(2);
   });
 
-  it("stops creating past depth 3", async () => {
+  it("creates the full path — no 3-level cap", async () => {
     const r = await ensure({ segments: ["1", "2", "3", "4", "5"] });
     const { folderId } = await r.json();
     const leaf = await db.prisma.folder.findUniqueOrThrow({ where: { id: folderId } });
-    expect(leaf.name).toBe("3");
-    expect(await db.prisma.folder.count()).toBe(3);
+    expect(leaf.name).toBe("5");
+    expect(await db.prisma.folder.count()).toBe(5);
   });
 
-  it("respects parentId and counts its depth", async () => {
+  it("nests under parentId to full depth", async () => {
     const root = await db.prisma.folder.create({ data: { name: "root" } });
     const r = await ensure({ segments: ["x", "y", "z"], parentId: root.id });
     const { folderId } = await r.json();
     const leaf = await db.prisma.folder.findUniqueOrThrow({ where: { id: folderId } });
-    // root(1) + x(2) + y(3) => z is clamped
-    expect(leaf.name).toBe("y");
-    expect(await db.prisma.folder.count()).toBe(3);
+    expect(leaf.name).toBe("z");
+    expect(await db.prisma.folder.count()).toBe(4); // root + x + y + z
   });
 });

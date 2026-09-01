@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       const parent = await prisma.folder.findUnique({ where: { id: b.data.parentId } });
       if (!parent) throw new HttpError(400, "parent not found");
       if ((await depthOf(b.data.parentId)) >= MAX_FOLDER_DEPTH) {
-        throw new HttpError(400, `폴더는 ${MAX_FOLDER_DEPTH}단계까지만 만들 수 있어요`);
+        throw new HttpError(400, "폴더가 너무 깊어요");
       }
     }
     const folder = await prisma.folder.create({
