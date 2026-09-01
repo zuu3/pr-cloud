@@ -16,7 +16,7 @@
 
 | 키 | 비고 |
 |---|---|
-| `DATABASE_URL` | Trove Postgres |
+| `DATABASE_URL` | 관리형 Postgres (RDS/Trove) — VM 디스크가 휘발성이라 DB는 VM에 두지 않는다. `postgresql://u:p@host:5432/db?sslmode=require`; 앞단에 pgBouncer가 있으면 `&pgbouncer=true&connection_limit=1`. Postgres 12+. VM→DB 네트워크가 열려 있어야 entrypoint의 `prisma migrate deploy`가 돈다. 영상/썸네일은 Ceph에 있고 앱은 로컬 디스크에 아무것도 쓰지 않으므로 VM 재생성에 안전하다 |
 | `NEXTAUTH_SECRET` / `NEXTAUTH_URL` | `NEXTAUTH_URL`은 공개 도메인 (공유 링크 절대 URL에 사용) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_HD` | `GOOGLE_HD=bssm.hs.kr` |
 | `S3_ENDPOINT_EXTERNAL` | 브라우저가 접근하는 RGW 주소 (presign 서명 host) |
@@ -57,6 +57,7 @@
 
 ## 백업
 
-- Postgres: Trove 스냅샷
+- Postgres: 관리형 DB의 자동 스냅샷/백업 기능
 - 오브젝트: Ceph 풀 복제 정책에 위임 (앱에서 별도 처리 없음)
+- VM 디스크: 백업 불필요 (상태 없음)
 - 휴지통은 자동 영구삭제 없음 — 필요 시 관리자가 "휴지통 비우기"(단어 입력 확인)
