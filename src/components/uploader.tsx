@@ -200,7 +200,6 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
           </button>
           <p className="min-w-0 flex-1 text-[13px] leading-[1.5] text-muted">
             SD카드 폴더를 통째로 고르면 안쪽 구조 그대로 올라가요.
-            {` ${MAX_FOLDER_DEPTH}단계까지만 폴더로 만들고, 더 깊으면 파일명 앞에 붙여요.`}
           </p>
         </div>
         <input

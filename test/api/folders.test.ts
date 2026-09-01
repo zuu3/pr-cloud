@@ -37,17 +37,25 @@ describe("folders API", () => {
     expect(r.status).toBe(400);
   });
 
-  it("rejects folders deeper than MAX_FOLDER_DEPTH", async () => {
+  it("allows nesting past 3 levels (no product depth limit)", async () => {
     const { POST } = await import("@/app/api/folders/route");
     let parentId: string | undefined;
-    // depth 1, 2, 3 ok
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 8; i++) {
       const res = await POST(req("/api/folders", jbody({ name: `L${i}`, parentId })));
       expect(res.status).toBe(201);
       parentId = (await res.json()).folder.id;
     }
-    // depth 4 rejected
-    const deep = await POST(req("/api/folders", jbody({ name: "L4", parentId })));
-    expect(deep.status).toBe(400);
+  });
+
+  it("still guards against a pathological deep chain (MAX_FOLDER_DEPTH safety rail)", async () => {
+    const { POST } = await import("@/app/api/folders/route");
+    let parentId: string | undefined;
+    for (let i = 0; i < 30; i++) {
+      const res = await POST(req("/api/folders", jbody({ name: `D${i}`, parentId })));
+      expect(res.status).toBe(201);
+      parentId = (await res.json()).folder.id;
+    }
+    const tooDeep = await POST(req("/api/folders", jbody({ name: "D30", parentId })));
+    expect(tooDeep.status).toBe(400);
   });
 });

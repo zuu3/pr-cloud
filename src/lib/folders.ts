@@ -1,7 +1,9 @@
 export type FolderNode = { id: string; name: string; parentId: string | null };
 
-/** 보관함 > 1 > 2 > 3 */
-export const MAX_FOLDER_DEPTH = 3;
+/** Safety rail only — not a product limit. Guards against pathological deep
+ *  paths (breadcrumb blow-up, runaway webkitdirectory imports). Nobody nesting
+ *  video folders by hand gets near this. */
+export const MAX_FOLDER_DEPTH = 30;
 
 /** depth of a folder within the tree (root folder = 1). */
 export function depthOf(folders: FolderNode[], id: string): number {
@@ -21,7 +23,7 @@ export function folderPath(folders: FolderNode[], id: string): string {
   const parts: string[] = [];
   let cur = byId.get(id);
   let guard = 0;
-  while (cur && guard++ < 20) {
+  while (cur && guard++ < 50) {
     parts.unshift(cur.name);
     cur = cur.parentId ? byId.get(cur.parentId) : undefined;
   }
