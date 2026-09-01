@@ -5,7 +5,14 @@ import { handle, json, HttpError } from "@/lib/http";
 import { logAudit } from "@/lib/audit";
 
 type Ctx = { params: Promise<{ id: string }> };
-const renameSchema = z.object({ name: z.string().min(1).max(20) });
+const patchSchema = z
+  .object({
+    name: z.string().min(1).max(20).optional(),
+    coverVideoId: z.string().uuid().nullable().optional(),
+  })
+  .refine((o) => o.name !== undefined || o.coverVideoId !== undefined, {
+    message: "empty patch",
+  });
 
 /** this folder + every descendant folder id */
 async function subtreeIds(rootId: string): Promise<string[]> {
@@ -42,16 +49,43 @@ export async function PATCH(request: Request, { params }: Ctx) {
   return handle(async () => {
     const user = await requireUser();
     const { id } = await params;
-    const b = renameSchema.safeParse(await request.json());
+    const b = patchSchema.safeParse(await request.json());
     if (!b.success) throw new HttpError(400, "invalid body");
     const folder = await prisma.folder.findUnique({ where: { id } });
     if (!folder) throw new HttpError(404, "not found");
+
+    const data: { name?: string; coverVideoId?: string | null } = {};
+    if (b.data.name !== undefined) data.name = b.data.name;
+
+    if (b.data.coverVideoId !== undefined) {
+      if (b.data.coverVideoId === null) {
+        data.coverVideoId = null; // back to auto
+      } else {
+        const ids = await subtreeIds(id);
+        const v = await prisma.video.findFirst({
+          where: {
+            id: b.data.coverVideoId,
+            folderId: { in: ids },
+            deletedAt: null,
+            status: "ready",
+          },
+          select: { id: true },
+        });
+        if (!v) throw new HttpError(400, "이 폴더 안의 영상이 아니에요");
+        data.coverVideoId = v.id;
+      }
+    }
+
     const updated = await prisma.folder.update({
       where: { id },
-      data: { name: b.data.name },
+      data,
       select: { id: true, name: true, parentId: true },
     });
-    await logAudit(user.email, "folder.rename", id);
+    await logAudit(
+      user.email,
+      b.data.coverVideoId !== undefined ? "folder.cover" : "folder.rename",
+      id,
+    );
     return json({ folder: updated });
   });
 }

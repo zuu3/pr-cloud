@@ -37,15 +37,17 @@ model User {
 }
 
 model Folder {
-  id         String      @id @default(uuid())
-  name       String
-  parentId   String?
-  parent     Folder?     @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children   Folder[]    @relation("FolderTree")
-  createdBy  String?
-  createdAt  DateTime    @default(now())
-  videos     Video[]
-  shareLinks ShareLink[]
+  id           String      @id @default(uuid())
+  name         String
+  parentId     String?
+  parent       Folder?     @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Folder[]    @relation("FolderTree")
+  createdBy    String?
+  createdAt    DateTime    @default(now())
+  coverVideoId String?
+  coverVideo   Video?      @relation("FolderCover", fields: [coverVideoId], references: [id], onDelete: SetNull)
+  videos       Video[]
+  shareLinks   ShareLink[]
 }
 
 model Video {
@@ -69,6 +71,7 @@ model Video {
   updatedAt        DateTime    @updatedAt
   upload           Upload?
   shareLinks       ShareLink[]
+  coverForFolders  Folder[]    @relation("FolderCover")
 }
 
 model Upload {
