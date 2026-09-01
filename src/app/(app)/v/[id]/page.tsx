@@ -4,6 +4,7 @@ import { BackLink } from "@/components/back-link";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { humanSize, humanDuration } from "@/lib/format";
+import { signGetUrl } from "@/lib/s3";
 import { VideoPlayer } from "@/components/video-player";
 import { VideoActions } from "@/components/video-actions";
 import { SharePanel } from "@/components/share-panel";
@@ -24,6 +25,15 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
       })
     : [];
   const poster = video.thumbKey ? `/api/thumb/${video.id}` : null;
+  // hand the player a ready-to-use URL so playback starts without an extra RTT
+  const playbackUrl =
+    video.playableInBrowser === false
+      ? null
+      : await signGetUrl(video.s3Key, { disposition: "inline" });
+  // a visit counts as a view
+  void prisma.video
+    .update({ where: { id }, data: { viewCount: { increment: 1 } } })
+    .catch(() => {});
 
   const meta = [
     humanSize(video.sizeBytes == null ? null : Number(video.sizeBytes)),
@@ -52,6 +62,7 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
           videoId={video.id}
           poster={poster}
           playable={video.playableInBrowser}
+          initialUrl={playbackUrl}
         />
       </div>
 

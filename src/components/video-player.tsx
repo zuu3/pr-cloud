@@ -6,12 +6,14 @@ export function VideoPlayer({
   videoId,
   poster,
   playable = null,
+  initialUrl = null,
 }: {
   videoId: string;
   poster?: string | null;
   playable?: boolean | null;
+  initialUrl?: string | null;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(initialUrl);
   const [err, setErr] = useState(false);
   const retried = useRef(false);
 
@@ -31,9 +33,9 @@ export function VideoPlayer({
   }
 
   useEffect(() => {
-    if (playable === false) return;
+    if (playable === false || initialUrl) return; // server already handed us a URL
     void load();
-  }, [videoId, playable]);
+  }, [videoId, playable, initialUrl]);
 
   if (playable === false) {
     return (

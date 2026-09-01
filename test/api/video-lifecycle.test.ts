@@ -88,15 +88,14 @@ describe("video lifecycle", () => {
     expect(await db.prisma.video.findUnique({ where: { id: v.id } })).toBeNull();
   });
 
-  it("inline url bumps viewCount, attachment does not", async () => {
+  it("url route does not touch viewCount (the detail page owns view counting)", async () => {
     const v = await readyVideo();
     const { GET } = await import("@/app/api/videos/[id]/url/route");
     await GET(req(`/api/videos/${v.id}/url`), { params: Promise.resolve({ id: v.id }) });
     await GET(req(`/api/videos/${v.id}/url?disposition=attachment`), {
       params: Promise.resolve({ id: v.id }),
     });
-    // increment is fire-and-forget; give it a tick
     await new Promise((r) => setTimeout(r, 50));
-    expect((await db.prisma.video.findUniqueOrThrow({ where: { id: v.id } })).viewCount).toBe(1);
+    expect((await db.prisma.video.findUniqueOrThrow({ where: { id: v.id } })).viewCount).toBe(0);
   });
 });

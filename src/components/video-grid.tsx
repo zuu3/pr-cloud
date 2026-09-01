@@ -72,6 +72,8 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [dropTarget, setDropTarget] = useState<string | null>(null); // folderId | "" (root)
   const [loadingMore, setLoadingMore] = useState(false);
   const first = useRef(true);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const animateCards = useRef(true); // stagger only on first mount, not on refetch
 
   function onCardDragStart(e: React.DragEvent, videoId: string) {
     const ids = sel.has(videoId) && sel.size > 0 ? [...sel] : [videoId];
@@ -131,6 +133,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       const res = await fetch(`/api/videos?${sp}`);
       if (res.ok) {
         const page: Page = await res.json();
+        animateCards.current = false; // no entry stagger on a filter refetch
         setVideos(page.videos);
         setCursor(page.nextCursor);
         exitSelect();
@@ -151,11 +154,31 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
 
   // refetch when a background upload finishes
   useEffect(() => {
-    const h = () => void reload();
+    const h = () => {
+      animateCards.current = false;
+      void reload();
+    };
     window.addEventListener("upload:done", h);
     return () => window.removeEventListener("upload:done", h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, folderId, sort, mine, days]);
+
+  // keyboard: "/" focuses search, Esc leaves select mode
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      const typing = el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || el?.isContentEditable;
+      if (e.key === "/" && !typing) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === "Escape" && selMode) {
+        exitSelect();
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selMode]);
 
   async function loadMore() {
     if (!cursor || loadingMore) return;
@@ -390,9 +413,10 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             className="w-[104px] shrink-0"
           />
           <input
+            ref={searchRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="제목 검색"
+            placeholder="제목 검색  ( / )"
             aria-label="제목으로 검색"
             className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-surface px-3.5 text-[14px] outline-none transition-colors focus:border-primary focus:bg-canvas sm:w-[200px] sm:flex-none"
           />
@@ -495,7 +519,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
             return (
               <motion.div
                 key={v.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={animateCards.current ? { opacity: 0, y: 10 } : false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25, delay: Math.min(i, 11) * 0.03, ease: "easeOut" }}
                 whileTap={{ scale: 0.985 }}
