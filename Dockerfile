@@ -21,6 +21,14 @@ ENV DATABASE_URL=postgres://build:build@localhost:5432/build \
     NEXT_PUBLIC_SINGLE_PUT_MAX_BYTES=83886080
 RUN npm run build
 
+# prisma CLI (+ its full dep closure: @prisma/config, effect, @prisma/engines …)
+# installed standalone so `migrate deploy` works without dragging the whole
+# build node_modules into the runtime image.
+FROM node:20-slim AS prisma-cli
+WORKDIR /pc
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN npm init -y >/dev/null 2>&1 && npm i --omit=dev --no-audit --no-fund prisma@6.19.3
+
 FROM node:20-slim AS run
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
@@ -30,9 +38,11 @@ COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 COPY --from=build /app/prisma ./prisma
+# generated @prisma/client engine for the app server (debian-openssl-3.0.x)
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=build /app/node_modules/prisma ./node_modules/prisma
+COPY --from=build /app/node_modules/@prisma/client ./node_modules/@prisma/client
+# prisma CLI + deps for the migration step (separate tree at /prisma-cli)
+COPY --from=prisma-cli /pc/node_modules /prisma-cli/node_modules
 COPY docker/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 EXPOSE 3000
