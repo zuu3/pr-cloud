@@ -31,6 +31,7 @@ jobs:
           S3_ACCESS_KEY: build
           S3_SECRET_KEY: build
           SEED_ADMIN_EMAIL: build@example.com
+          NEXT_PUBLIC_SINGLE_PUT_MAX_BYTES: "83886080"
       # unit + integration: embedded-postgres + in-process S3 stub, no services needed
       - run: npm test
 
@@ -68,7 +69,7 @@ jobs:
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       SEED_ADMIN_EMAIL: admin@school.ac.kr
-      NEXT_PUBLIC_SINGLE_PUT_MAX_BYTES: "94371840"
+      NEXT_PUBLIC_SINGLE_PUT_MAX_BYTES: "83886080"
       E2E_AUTH: "1"
     steps:
       - uses: actions/checkout@v4
