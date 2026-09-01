@@ -2,6 +2,9 @@
 Description=홍보부 촬영본 클라우드 (Next standalone)
 After=network-online.target
 Wants=network-online.target
+# crash-loop guard lives in [Unit], not [Service]
+StartLimitIntervalSec=120
+StartLimitBurst=6
 
 [Service]
 Type=simple
@@ -16,8 +19,8 @@ ExecStartPre=/usr/bin/node /opt/promo/current/prisma-cli/node_modules/prisma/bui
 ExecStart=/usr/bin/node /opt/promo/current/server.js
 Restart=on-failure
 RestartSec=5
-StartLimitIntervalSec=120
-StartLimitBurst=6
+KillMode=mixed
+TimeoutStopSec=20
 # 2 GiB VM guard — ffmpeg thumbnail spikes are best-effort and may be killed
 MemoryMax=1400M
 MemoryHigh=1200M
