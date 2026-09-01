@@ -4,7 +4,6 @@ import { BackLink } from "@/components/back-link";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { humanSize, humanDuration } from "@/lib/format";
-import { signGetUrl } from "@/lib/s3";
 import { VideoPlayer } from "@/components/video-player";
 import { VideoActions } from "@/components/video-actions";
 import { SharePanel } from "@/components/share-panel";
@@ -18,12 +17,13 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
   if (!video || video.status !== "ready" || video.deletedAt) notFound();
 
   const canManage = user.role === "admin" || video.uploadedBy === user.email;
-  const [folders, poster] = await Promise.all([
-    canManage
-      ? prisma.folder.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, parentId: true } })
-      : Promise.resolve([]),
-    video.thumbKey ? signGetUrl(video.thumbKey, { disposition: "inline" }) : Promise.resolve(null),
-  ]);
+  const folders = canManage
+    ? await prisma.folder.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, parentId: true },
+      })
+    : [];
+  const poster = video.thumbKey ? `/api/thumb/${video.id}` : null;
 
   const meta = [
     humanSize(video.sizeBytes == null ? null : Number(video.sizeBytes)),

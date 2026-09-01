@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FolderPicker } from "@/components/folder-picker";
 import { IconUpload, IconFolder } from "@/components/ui/icons";
-import { useUpload } from "@/components/upload/upload-provider";
+import { useUpload } from "@/components/upload/upload-context";
 import { useToast } from "@/components/ui/toast";
 import { useDialog } from "@/components/ui/dialog";
 import { MAX_FOLDER_DEPTH, depthOf, type FolderNode } from "@/lib/folders";

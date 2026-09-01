@@ -5,7 +5,6 @@ import { handle, json, HttpError } from "@/lib/http";
 import { logAudit } from "@/lib/audit";
 import { MAX_FOLDER_DEPTH } from "@/lib/folders";
 import { subtreeIds } from "@/lib/subtree";
-import { signGetUrl } from "@/lib/s3";
 
 export async function GET() {
   return handle(async () => {
@@ -24,21 +23,14 @@ export async function GET() {
         folderId: { not: null },
       },
       orderBy: { createdAt: "desc" },
-      select: { folderId: true, thumbKey: true },
+      select: { id: true, folderId: true },
     });
 
-    const withCover = await Promise.all(
-      folders.map(async (f) => {
-        const sub = new Set(subtreeIds(folders, f.id));
-        const hit = vids.find((v) => v.folderId && sub.has(v.folderId));
-        return {
-          ...f,
-          coverThumbUrl: hit?.thumbKey
-            ? await signGetUrl(hit.thumbKey, { disposition: "inline" })
-            : null,
-        };
-      }),
-    );
+    const withCover = folders.map((f) => {
+      const sub = new Set(subtreeIds(folders, f.id));
+      const hit = vids.find((v) => v.folderId && sub.has(v.folderId));
+      return { ...f, coverThumbUrl: hit ? `/api/thumb/${hit.id}` : null };
+    });
     return json({ folders: withCover });
   });
 }
