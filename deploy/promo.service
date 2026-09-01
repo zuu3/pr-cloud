@@ -6,16 +6,18 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/opt/promo
+# /opt/promo/current is a symlink to the active release dir — atomic swap on deploy
+WorkingDirectory=/opt/promo/current
 EnvironmentFile=/etc/promo/promo.env
 Environment=NODE_ENV=production
 Environment=PORT=8080
 Environment=HOSTNAME=0.0.0.0
-# migrate on every (re)start; entrypoint-style
-ExecStartPre=/usr/bin/node /opt/promo/prisma-cli/node_modules/prisma/build/index.js migrate deploy --schema /opt/promo/prisma/schema.prisma
-ExecStart=/usr/bin/node /opt/promo/server.js
+ExecStartPre=/usr/bin/node /opt/promo/current/prisma-cli/node_modules/prisma/build/index.js migrate deploy --schema /opt/promo/current/prisma/schema.prisma
+ExecStart=/usr/bin/node /opt/promo/current/server.js
 Restart=on-failure
 RestartSec=5
+StartLimitIntervalSec=120
+StartLimitBurst=6
 # 2 GiB VM guard — ffmpeg thumbnail spikes are best-effort and may be killed
 MemoryMax=1400M
 MemoryHigh=1200M

@@ -1,6 +1,6 @@
 #!/bin/sh
-# Bare-metal launcher: migrate, then run the Next standalone server.
-# Used by promo.service (ExecStart) and can be run by hand for debugging.
+# Manual launcher for debugging (promo.service calls node directly).
+# migrate, then run the Next standalone server.
 set -e
 cd "$(dirname "$0")"
 
