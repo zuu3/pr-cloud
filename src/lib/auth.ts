@@ -24,6 +24,9 @@ const e2eProvider = Credentials({
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: env.NEXTAUTH_SECRET,
+  // deployed behind an nginx TLS proxy — trust the forwarded host/proto so
+  // Auth.js doesn't reject requests as UntrustedHost (no AUTH_TRUST_HOST needed)
+  trustHost: true,
   session: { strategy: "jwt", maxAge: 60 * 60 * 12 },
   pages: { signIn: "/login", error: "/login" },
   providers: [
