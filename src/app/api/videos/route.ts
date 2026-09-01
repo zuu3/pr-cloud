@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
-import { signGetUrl } from "@/lib/s3";
 import type { Prisma } from "@prisma/client";
 
 type SortKey = "new" | "old" | "title" | "size" | "views";
@@ -62,14 +61,12 @@ export async function GET(request: Request) {
     });
 
     const nextCursor = rows.length > 50 ? rows[49].id : null;
-    const videos = await Promise.all(
-      rows.slice(0, 50).map(async (v) => ({
-        ...v,
-        sizeBytes: v.sizeBytes == null ? null : Number(v.sizeBytes),
-        thumbUrl: v.thumbKey ? await signGetUrl(v.thumbKey, { disposition: "inline" }) : null,
-        thumbKey: undefined,
-      })),
-    );
+    const videos = rows.slice(0, 50).map((v) => ({
+      ...v,
+      sizeBytes: v.sizeBytes == null ? null : Number(v.sizeBytes),
+      thumbUrl: v.thumbKey ? `/api/thumb/${v.id}` : null,
+      thumbKey: undefined,
+    }));
     return json({ videos, nextCursor });
   });
 }

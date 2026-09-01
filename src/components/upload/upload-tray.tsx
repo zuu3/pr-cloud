@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { useUpload } from "./upload-provider";
+import { useUpload } from "./upload-context";
 import { humanSize, humanEta, humanSpeed } from "@/lib/format";
 import { IconChevronDown } from "@/components/ui/icons";
 
