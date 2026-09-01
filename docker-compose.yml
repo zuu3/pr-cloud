@@ -1,10 +1,12 @@
 services:
   api:
-    image: registry/promo-video-api:latest
+    image: ghcr.io/zuu3/pr-cloud:latest
     restart: always
     ports:
-      - "8080:3000"
+      - "8080:3000" # nginx on the VM proxies :443 -> :8080
     env_file: /etc/promo/promo.env
+    # 2GiB VM: keep the app from eating everything if ffmpeg spikes
+    mem_limit: 1500m
     healthcheck:
       test:
         - CMD

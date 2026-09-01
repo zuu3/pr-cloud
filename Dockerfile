@@ -17,7 +17,8 @@ ENV DATABASE_URL=postgres://build:build@localhost:5432/build \
     GOOGLE_CLIENT_ID=build GOOGLE_CLIENT_SECRET=build GOOGLE_HD=example.com \
     S3_ENDPOINT_EXTERNAL=http://localhost:9000 S3_ENDPOINT_INTERNAL=http://localhost:9000 \
     S3_REGION=us-east-1 S3_BUCKET=build S3_ACCESS_KEY=build S3_SECRET_KEY=build \
-    SEED_ADMIN_EMAIL=build@example.com
+    SEED_ADMIN_EMAIL=build@example.com \
+    NEXT_PUBLIC_SINGLE_PUT_MAX_BYTES=83886080
 RUN npm run build
 
 FROM node:20-slim AS run

@@ -3,7 +3,77 @@
 교내 OpenStack VM에 Docker 컨테이너로 배포. 설계 상세는
 `docs/superpowers/specs/2026-08-31-promo-video-cloud-design.md`.
 
-## 이미지
+## 인프라 (2026-09-01 기준)
+
+| 자원 | 주소 | 스펙 | 용도 |
+|---|---|---|---|
+| VM `pr-dept` | `10.10.1.12` | 2 vCPU / 2GiB | 앱 컨테이너 (SG `pr-dept-web`) |
+| VM `pr-dept-s3-endpoint` | `10.10.1.11` | 2 vCPU / 0.5GiB | RGW 앞단 nginx (`pr-dept-s3.madp.cloud`) |
+| RDS `pr-dept` | `10.10.1.7:5432` | PostgreSQL 18, 6GiB | 메타데이터 DB |
+| Ceph RGW 버킷 | `pr-dept-bucket` | — | 영상 + 썸네일 |
+
+앱 VM 2GiB — `next build`는 절대 여기서 하지 않는다 (빌드 스테이지 RAM 4GB+).
+런타임은 컨테이너 ~200–400MB + ffmpeg 스파이크. swap 2GB 권장.
+
+## 이미지 빌드 (GitHub Actions → GHCR)
+
+`.github/workflows/release.yml` — `main` push 또는 수동 실행 시
+`ghcr.io/zuu3/pr-cloud:latest` (+ `sha-xxxxxxx`) 로 amd64 이미지를 빌드·푸시한다.
+VM에서는 빌드하지 않고 pull만 한다.
+
+패키지가 private면 VM에서 로그인 필요:
+```
+echo <GHCR_READ_PAT> | docker login ghcr.io -u zuu3 --password-stdin
+```
+(또는 GitHub Packages 설정에서 이미지를 public 으로)
+
+## VM 최초 세팅 (`pr-dept`, ubuntu-24.04-minimal)
+
+```sh
+# Docker
+curl -fsSL https://get.docker.com | sh
+
+# swap 2GB
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# env 파일
+sudo mkdir -p /etc/promo
+sudo nano /etc/promo/promo.env      # 아래 "환경 변수" 표대로 채운다 (0600)
+sudo chmod 600 /etc/promo/promo.env
+
+# compose 파일 (레포의 docker-compose.yml 복사)
+mkdir -p ~/promo && cd ~/promo
+curl -fsSLO https://raw.githubusercontent.com/zuu3/pr-cloud/main/docker-compose.yml
+```
+
+## 배포 / 업데이트
+
+```sh
+cd ~/promo
+docker compose pull
+docker compose up -d          # entrypoint가 prisma migrate deploy 자동 실행
+docker compose logs -f api
+curl -s localhost:8080/api/healthz    # {"ok":true} 확인
+```
+
+롤백: `image:` 태그를 `sha-<이전>` 로 바꾸고 `docker compose up -d`.
+
+## 앞단 nginx (`pr-dept` VM 또는 별도)
+
+`:443` → `127.0.0.1:8080` 프록시. 업로드는 브라우저가 RGW로 직접 가므로
+이 nginx는 HTML/API만 넘긴다 (본문 제한 완화 불필요).
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+}
+```
+
+## 이미지 내부
 
 `Dockerfile` — Node 20 standalone 빌드. 런 스테이지에 `ffmpeg` 포함
 (썸네일·재생시간·코덱 추출, `src/lib/media.ts`). `archiver`(ZIP 스트리밍)는
