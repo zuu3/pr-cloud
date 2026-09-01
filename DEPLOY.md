@@ -15,7 +15,52 @@
 앱 VM 2GiB — `next build`는 절대 여기서 하지 않는다 (빌드 스테이지 RAM 4GB+).
 런타임은 컨테이너 ~200–400MB + ffmpeg 스파이크. swap 2GB 권장.
 
-## 이미지 빌드 (GitHub Actions → GHCR)
+## 배포 방식 2가지
+
+- **A. bare-metal (권장, 2GiB VM)** — CI가 standalone 빌드를 `promo-bundle.tar.gz`로
+  묶어 GitHub Release(`bundle` 태그)에 올린다. VM은 node + ffmpeg만 있으면 되고
+  systemd로 돌린다. 디스크 ~400MB, RAM ~150–250MB.
+- **B. Docker** — `ghcr.io/zuu3/pr-cloud:latest`. 격리되지만 이미지 ~1.4GB.
+
+### A. bare-metal (systemd)
+
+```sh
+# 1. node 22 + ffmpeg (Docker 불필요)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs ffmpeg
+
+# 2. 번들 받기
+sudo mkdir -p /opt/promo
+curl -fsSL https://github.com/zuu3/pr-cloud/releases/download/bundle/promo-bundle.tar.gz \
+  | sudo tar -xz -C /opt/promo
+sudo chown -R ubuntu:ubuntu /opt/promo
+
+# 3. env (deploy/promo.env.example 참고, 0600)
+sudo mkdir -p /etc/promo
+sudo nano /etc/promo/promo.env
+sudo chmod 600 /etc/promo/promo.env
+
+# 4. systemd
+sudo cp /opt/promo/promo.service /etc/systemd/system/promo.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now promo
+sudo journalctl -u promo -f          # 마이그레이션 로그 + 기동 확인
+curl -s localhost:8080/api/healthz    # {"ok":true}
+```
+
+업데이트:
+```sh
+sudo systemctl stop promo
+curl -fsSL https://github.com/zuu3/pr-cloud/releases/download/bundle/promo-bundle.tar.gz \
+  | sudo tar -xz -C /opt/promo
+sudo chown -R ubuntu:ubuntu /opt/promo
+sudo systemctl start promo
+```
+
+`server.js`는 `PORT`/`HOSTNAME` env를 따른다. `promo.service`가 `PORT=8080`으로
+띄우므로 앞단 nginx는 `127.0.0.1:8080`으로 프록시한다.
+
+### B. Docker 이미지 (GitHub Actions → GHCR)
 
 `.github/workflows/release.yml` — `main` push 또는 수동 실행 시
 `ghcr.io/zuu3/pr-cloud:latest` (+ `sha-xxxxxxx`) 로 amd64 이미지를 빌드·푸시한다.
