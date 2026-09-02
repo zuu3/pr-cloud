@@ -56,7 +56,7 @@ const DATE_RANGES = [
 ] as const;
 
 const KINDS = [
-  ["", "영상 + 사진"],
+  ["", "전체"],
   ["video", "영상만"],
   ["image", "사진만"],
 ] as const;
