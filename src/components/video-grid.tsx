@@ -212,7 +212,7 @@ export function VideoGrid({
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [selMode, setSelMode] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  const [moveIds, setMoveIds] = useState<string[] | null>(null); // context-menu move target; null = use selection
+  const moveIdsRef = useRef<string[] | null>(null); // context-menu move target; null = use selection
   const [shareVideo, setShareVideo] = useState<Video | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
@@ -654,8 +654,8 @@ export function VideoGrid({
 
   function bulkMoveTo(folderId: string) {
     setMoveOpen(false);
-    const ids = moveIds ?? [...sel];
-    setMoveIds(null);
+    const ids = moveIdsRef.current ?? [...sel];
+    moveIdsRef.current = null;
     if (ids.length === 0) return;
     bulkM.mutate({ action: "move", folderId: folderId || null, ids });
   }
@@ -1245,7 +1245,10 @@ export function VideoGrid({
                 variant="ghost"
                 size="md"
                 className="border border-border"
-                onClick={() => setMoveOpen(true)}
+                onClick={() => {
+                  moveIdsRef.current = null;
+                  setMoveOpen(true);
+                }}
                 disabled={sel.size === 0}
                 loading={bulkM.isPending}
               >
@@ -1287,7 +1290,7 @@ export function VideoGrid({
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-[17px] font-bold text-foreground">
-              {sel.size}개 영상을 옮길 폴더
+              {(moveIdsRef.current?.length ?? sel.size)}개 영상을 옮길 폴더
             </h2>
             <div className="mt-3">
               <FolderPicker folders={allFolders} value="" onChange={bulkMoveTo} />
@@ -1508,7 +1511,7 @@ export function VideoGrid({
                       className={`${item} text-body`}
                       onClick={() => {
                         setCtx(null);
-                        setMoveIds([v.id]);
+                        moveIdsRef.current = [v.id];
                         setMoveOpen(true);
                       }}
                     >
