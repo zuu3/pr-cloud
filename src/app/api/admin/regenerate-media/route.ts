@@ -7,7 +7,8 @@ import { generateMedia } from "@/lib/media";
 // Backfill thumbnails + the playable-in-browser flag for videos uploaded
 // before those were computed. Runs in the background, capped per call.
 // ?transcode=1 instead targets already-flagged non-web-playable videos that
-// still have no h264 proxy — transcoding is heavy, so the cap is much smaller.
+// still have no h264 proxy — transcoding pins a CPU for minutes, so only a
+// few per call; the admin re-clicks to work through a backlog.
 export async function POST(request: Request) {
   return handle(async () => {
     const admin = await requireAdmin();
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
           },
       orderBy: { createdAt: "desc" },
       select: { id: true },
-      take: transcode ? 20 : 500,
+      take: transcode ? 3 : 500,
     });
 
     void (async () => {
