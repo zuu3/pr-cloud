@@ -229,7 +229,12 @@ export async function generateMedia(videoId: string): Promise<void> {
     // non-web-playable source → try to build an h264 proxy so it plays in-browser
     const cap = env.PROXY_MAX_SOURCE_BYTES;
     const srcBytes = video.sizeBytes == null ? null : Number(video.sizeBytes);
-    if (playable === false && cap > 0 && (srcBytes == null || srcBytes <= cap)) {
+    if (
+      playable === false &&
+      !video.proxyKey &&
+      cap > 0 &&
+      (srcBytes == null || srcBytes <= cap)
+    ) {
       const proxyKey = await buildProxy(videoId, url);
       if (proxyKey) {
         await prisma.video.update({
