@@ -1,9 +1,13 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { once } from "node:events";
 import { promisify } from "node:util";
-import { readFile, unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  PutObjectCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
+} from "@aws-sdk/client-s3";
 import { prisma } from "./db";
 import { env } from "./env";
 import { s3Internal, BUCKET, signInternalGetUrl } from "./s3";
@@ -71,36 +75,90 @@ async function grabPoster(url: string, atSec: number): Promise<Buffer | null> {
 }
 
 /**
- * Transcode a non-web-playable source to a faststart h264/aac mp4 and upload it
- * as the video's proxy. Heavy (minutes) — runs only from the background job and
- * only for sources under PROXY_MAX_SOURCE_BYTES. Returns the proxy key or null.
+ * Transcode a non-web-playable source to a fragmented h264/aac mp4 and stream it
+ * straight to S3 as the video's proxy — ffmpeg writes to stdout, we multipart-
+ * upload the pipe in ~8 MB parts, so nothing large ever touches local disk (the
+ * VM has almost none). Heavy (minutes); runs only from the background job for
+ * sources under PROXY_MAX_SOURCE_BYTES. Returns the proxy key or null.
  */
+const PART_SIZE = 8 << 20; // 8 MiB
+
 async function buildProxy(videoId: string, srcUrl: string): Promise<string | null> {
-  const out = join(tmpdir(), `proxy-${videoId}.mp4`);
+  const key = `promo-video/proxy/${videoId}.mp4`;
+  const ff = spawn(FFMPEG, [
+    "-nostdin",
+    "-i", srcUrl,
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+    "-c:a", "aac", "-b:a", "160k",
+    // fragmented mp4 so a non-seekable pipe still produces a streamable file
+    "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+    "-f", "mp4",
+    "pipe:1",
+  ]);
+  let stderr = "";
+  ff.stderr.on("data", (d) => {
+    stderr = (stderr + d.toString()).slice(-4000);
+  });
+
+  const kill = setTimeout(() => ff.kill("SIGKILL"), 30 * 60_000);
+  let uploadId: string | undefined;
   try {
-    await run(
-      FFMPEG,
-      [
-        "-y",
-        "-i", srcUrl,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-        "-c:a", "aac", "-b:a", "160k",
-        "-movflags", "+faststart",
-        out,
-      ],
-      { timeout: 30 * 60_000, maxBuffer: 8 << 20 },
+    const created = await s3Internal.send(
+      new CreateMultipartUploadCommand({ Bucket: BUCKET, Key: key, ContentType: "video/mp4" }),
     );
-    const body = await readFile(out);
-    const key = `promo-video/proxy/${videoId}.mp4`;
+    uploadId = created.UploadId!;
+    const parts: { ETag: string; PartNumber: number }[] = [];
+    let buf: Buffer[] = [];
+    let buffered = 0;
+    let partNo = 0;
+
+    const flush = async () => {
+      if (buffered === 0) return;
+      const body = Buffer.concat(buf, buffered);
+      buf = [];
+      buffered = 0;
+      partNo += 1;
+      const r = await s3Internal.send(
+        new UploadPartCommand({
+          Bucket: BUCKET,
+          Key: key,
+          UploadId: uploadId,
+          PartNumber: partNo,
+          Body: body,
+        }),
+      );
+      parts.push({ ETag: r.ETag!, PartNumber: partNo });
+    };
+
+    for await (const chunk of ff.stdout as AsyncIterable<Buffer>) {
+      buf.push(chunk);
+      buffered += chunk.length;
+      if (buffered >= PART_SIZE) await flush();
+    }
+    const [code] = (await once(ff, "close")) as [number];
+    if (code !== 0) throw new Error(`ffmpeg exited ${code}: ${stderr.split("\n").pop()}`);
+    await flush();
+    if (parts.length === 0) throw new Error("ffmpeg produced no output");
+
     await s3Internal.send(
-      new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: body, ContentType: "video/mp4" }),
+      new CompleteMultipartUploadCommand({
+        Bucket: BUCKET,
+        Key: key,
+        UploadId: uploadId,
+        MultipartUpload: { Parts: parts },
+      }),
     );
     return key;
   } catch (e) {
     console.warn("buildProxy failed", videoId, e);
+    if (uploadId) {
+      await s3Internal
+        .send(new AbortMultipartUploadCommand({ Bucket: BUCKET, Key: key, UploadId: uploadId }))
+        .catch(() => {});
+    }
     return null;
   } finally {
-    await unlink(out).catch(() => {});
+    clearTimeout(kill);
   }
 }
 
