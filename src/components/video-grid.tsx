@@ -10,7 +10,24 @@ import { MAX_FOLDER_DEPTH } from "@/lib/folders";
 import { IconFolder, IconFilm, IconPlay, IconCheck, IconGrid, IconList } from "@/components/ui/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion, Reorder } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useMutation } from "@tanstack/react-query";
 import { humanSize, humanDuration } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -62,6 +79,23 @@ const KINDS = [
   ["video", "영상만"],
   ["image", "사진만"],
 ] as const;
+
+function SortableItem({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`cursor-grab touch-none active:cursor-grabbing ${isDragging ? "z-10 opacity-80" : ""}`}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
 
 function EditableTitle({
   id,
@@ -181,6 +215,7 @@ export function VideoGrid({
   const [coverTab, setCoverTab] = useState<"video" | "upload">("video");
   const [dropTarget, setDropTarget] = useState<string | null>(null); // folderId | "" (root)
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loading, setLoading] = useState(false); // filter refetch in flight
   const first = useRef(true);
   const searchRef = useRef<HTMLInputElement>(null);
   const animateCards = useRef(true); // stagger only on first mount, not on refetch
@@ -259,6 +294,7 @@ export function VideoGrid({
     const t = setTimeout(async () => {
       const sp = buildParams();
       router.replace(sp.toString() ? `/?${sp}` : "/");
+      setLoading(true);
       const res = await fetch(`/api/videos?${sp}`);
       if (res.ok) {
         const page: Page = await res.json();
@@ -267,6 +303,7 @@ export function VideoGrid({
         setCursor(page.nextCursor);
         exitSelect();
       }
+      setLoading(false);
     }, 280);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -345,8 +382,18 @@ export function VideoGrid({
       600,
     );
   }
-
-  const draggedRef = useRef(false); // true while / just after a reorder drag
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  );
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = videos.findIndex((v) => v.id === active.id);
+    const to = videos.findIndex((v) => v.id === over.id);
+    if (from < 0 || to < 0) return;
+    onReorder(arrayMove(videos, from, to));
+  }
 
   const selAnchor = useRef<number | null>(null);
   function toggleAt(index: number, shift: boolean) {
@@ -712,18 +759,38 @@ export function VideoGrid({
         </Link>
       </div>
 
-      {videos.length === 0 ? (
+      {videos.length === 0 && loading ? (
+        <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="overflow-hidden rounded-2xl border border-border">
+              <div className="aspect-video animate-pulse bg-surface" />
+              <div className="space-y-2 p-4">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-surface" />
+                <div className="h-3 w-1/2 animate-pulse rounded bg-surface" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : videos.length === 0 ? (
         <div className="mt-20 flex flex-col items-center text-center">
           <div className="flex size-16 items-center justify-center rounded-2xl bg-surface text-[26px] text-muted">
             <IconFilm />
           </div>
           <p className="mt-4 text-[16px] font-semibold text-foreground">
-            {q ? "검색 결과가 없어요" : "아직 올린 영상이 없어요"}
+            {q
+              ? "검색 결과가 없어요"
+              : mine || days || kind
+                ? "조건에 맞는 항목이 없어요"
+                : "아직 올린 영상이 없어요"}
           </p>
           <p className="mt-1 text-[14px] text-muted">
-            {q ? "다른 제목으로 찾아보세요." : "첫 영상을 올려보세요."}
+            {q
+              ? "다른 제목으로 찾아보세요."
+              : mine || days || kind
+                ? "필터를 바꾸거나 초기화해보세요."
+                : "첫 영상을 올려보세요."}
           </p>
-          {!q && (
+          {!q && !mine && !days && !kind && (
             <Link
               href={folderId ? `/upload?folderId=${folderId}` : "/upload"}
               className="mt-5"
@@ -734,8 +801,7 @@ export function VideoGrid({
         </div>
       ) : (
         (() => {
-          // motion Reorder is 1D — force the list layout while reordering
-          const gridView = view === "grid" && !reorderMode;
+          const gridView = view === "grid";
           const containerCls = gridView
             ? "mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
             : "mt-6 flex flex-col divide-y divide-border overflow-hidden rounded-2xl border border-border";
@@ -750,7 +816,7 @@ export function VideoGrid({
                   onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
                   onClick={(e) => {
                     if (reorderMode) {
-                      if (draggedRef.current) e.preventDefault();
+                      e.preventDefault();
                       return;
                     }
                     if (selMode) {
@@ -814,7 +880,7 @@ export function VideoGrid({
                 onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
                 onClick={(e) => {
                   if (reorderMode) {
-                    if (draggedRef.current) e.preventDefault();
+                    e.preventDefault();
                     return;
                   }
                   if (selMode) {
@@ -892,32 +958,24 @@ export function VideoGrid({
                 <p className="mt-4 text-[12px] text-muted">
                   끌어서 순서를 바꿔요. 순서는 자동으로 저장돼요.
                 </p>
-                <Reorder.Group
-                  axis="y"
-                  as="div"
-                  values={videos}
-                  onReorder={onReorder}
-                  className={containerCls}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
                 >
-                  {videos.map((v, i) => (
-                    <Reorder.Item
-                      key={v.id}
-                      value={v}
-                      as="div"
-                      className="cursor-grab touch-none active:cursor-grabbing"
-                      onDragStart={() => {
-                        draggedRef.current = true;
-                      }}
-                      onDragEnd={() => {
-                        setTimeout(() => {
-                          draggedRef.current = false;
-                        }, 60);
-                      }}
-                    >
-                      {renderItem(v, i)}
-                    </Reorder.Item>
-                  ))}
-                </Reorder.Group>
+                  <SortableContext
+                    items={videos.map((v) => v.id)}
+                    strategy={gridView ? rectSortingStrategy : verticalListSortingStrategy}
+                  >
+                    <div className={containerCls}>
+                      {videos.map((v, i) => (
+                        <SortableItem key={v.id} id={v.id}>
+                          {renderItem(v, i)}
+                        </SortableItem>
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               </>
             );
           }
