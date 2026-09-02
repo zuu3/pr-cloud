@@ -13,7 +13,7 @@ export async function GET(request: Request, { params }: Ctx) {
     }
     const dl = new URL(request.url).searchParams.get("dl") === "1";
     const v = await prisma.video.findUniqueOrThrow({ where: { id: videoId } });
-    const url = await signGetUrl(v.s3Key, {
+    const url = await signGetUrl(dl ? v.s3Key : (v.proxyKey ?? v.s3Key), {
       disposition: dl ? "attachment" : "inline",
       filename: dl ? v.originalFilename : undefined,
     });

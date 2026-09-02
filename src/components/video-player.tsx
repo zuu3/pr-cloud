@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { playerBus } from "@/lib/player-bus";
 
 export function VideoPlayer({
   videoId,
@@ -75,6 +76,7 @@ export function VideoPlayer({
   return (
     <video
       key={url}
+      ref={(node) => playerBus.attach(node)}
       src={url}
       poster={poster ?? undefined}
       controls

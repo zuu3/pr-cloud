@@ -48,6 +48,7 @@ type Video = {
   viewCount: number;
   createdAt: string;
   folderId: string | null;
+  favorited: boolean;
 };
 type Folder = {
   id: string;
@@ -205,11 +206,14 @@ export function VideoGrid({
   const [q, setQ] = useState(params.get("q") ?? "");
   const [sort, setSort] = useState(params.get("sort") ?? "new");
   const [mine, setMine] = useState(params.get("mine") === "1");
+  const [fav, setFav] = useState(params.get("fav") === "1");
   const [days, setDays] = useState(params.get("days") ?? "");
   const [kind, setKind] = useState(params.get("kind") ?? "");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [selMode, setSelMode] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [moveIds, setMoveIds] = useState<string[] | null>(null); // context-menu move target; null = use selection
+  const [shareVideo, setShareVideo] = useState<Video | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [coverTab, setCoverTab] = useState<"video" | "upload">("video");
@@ -221,6 +225,14 @@ export function VideoGrid({
   const searchRef = useRef<HTMLInputElement>(null);
   const animateCards = useRef(true); // stagger only on first mount, not on refetch
   const [view, setView] = useState<"grid" | "list">("grid");
+
+  // right-click card menu
+  const [ctx, setCtx] = useState<{ x: number; y: number; v: Video } | null>(null);
+  // hover-to-preview (grid view, video only)
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewUrls = useRef<Map<string, string>>(new Map());
+  const [, forcePreview] = useState(0);
 
   useEffect(() => {
     try {
@@ -281,6 +293,7 @@ export function VideoGrid({
     if (q.trim()) sp.set("q", q.trim());
     if (sort !== "new") sp.set("sort", sort);
     if (mine) sp.set("mine", "1");
+    if (fav) sp.set("fav", "1");
     if (days) sp.set("days", days);
     if (kind) sp.set("kind", kind);
     for (const [k, v] of Object.entries(extra ?? {})) sp.set(k, v);
@@ -322,7 +335,7 @@ export function VideoGrid({
     setLoading(true);
     void runFetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort, mine, days, kind]);
+  }, [sort, mine, fav, days, kind]);
 
   async function reload() {
     const res = await fetch(`/api/videos?${buildParams()}`);
@@ -342,7 +355,7 @@ export function VideoGrid({
     window.addEventListener("upload:done", h);
     return () => window.removeEventListener("upload:done", h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, folderId, sort, mine, days, kind]);
+  }, [q, folderId, sort, mine, fav, days, kind]);
 
   // keyboard: "/" focuses search, Esc leaves select mode
   useEffect(() => {
@@ -464,6 +477,99 @@ export function VideoGrid({
     onError: (e: Error) => toast.show(e.message, "err"),
   });
 
+  // ---- right-click card menu ----
+  useEffect(() => {
+    if (!ctx) return;
+    const close = () => setCtx(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setCtx(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [ctx]);
+
+  async function ctxRename(v: Video) {
+    setCtx(null);
+    const name = await dialog.prompt({
+      title: "이름 변경",
+      initial: v.title,
+      maxLength: 200,
+      confirmText: "저장",
+    });
+    const t = name?.trim();
+    if (!t || t === v.title) return;
+    try {
+      await apiFetch(`/api/videos/${v.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: t }),
+      });
+      patchTitle(v.id, t);
+      toast.show("제목을 바꿨어요");
+    } catch (e) {
+      toast.show((e as Error).message, "err");
+    }
+  }
+
+  async function ctxDelete(v: Video) {
+    setCtx(null);
+    const ok = await dialog.confirm({
+      title: "이 항목을 삭제할까요?",
+      body: v.title,
+      danger: true,
+      confirmText: "삭제",
+    });
+    if (ok) bulkM.mutate({ action: "trash", ids: [v.id] });
+  }
+
+  async function ctxDownload(v: Video) {
+    setCtx(null);
+    try {
+      const r = await apiFetch(`/api/videos/${v.id}/url?disposition=attachment`);
+      window.location.href = r.url;
+    } catch (e) {
+      toast.show((e as Error).message, "err");
+    }
+  }
+
+  const favM = useMutation({
+    mutationFn: (a: { id: string; next: boolean }) =>
+      apiFetch(`/api/videos/${a.id}/favorite`, { method: a.next ? "PUT" : "DELETE" }),
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+  function toggleFav(v: Video) {
+    const next = !v.favorited;
+    setVideos((list) => list.map((x) => (x.id === v.id ? { ...x, favorited: next } : x)));
+    favM.mutate({ id: v.id, next });
+  }
+
+  // ---- hover-to-preview ----
+  function enterCard(v: Video) {
+    if (v.kind !== "video" || v.playableInBrowser === false) return;
+    hoverTimer.current = setTimeout(async () => {
+      setHoverId(v.id);
+      if (!previewUrls.current.has(v.id)) {
+        try {
+          const r = await apiFetch(`/api/videos/${v.id}/url?disposition=inline`);
+          previewUrls.current.set(v.id, r.url);
+          forcePreview((n) => n + 1);
+        } catch {
+          /* preview is optional */
+        }
+      }
+    }, 400);
+  }
+  function leaveCard() {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setHoverId(null);
+  }
+
   const newFolderM = useMutation({
     mutationFn: (name: string) =>
       apiFetch("/api/folders", {
@@ -548,8 +654,10 @@ export function VideoGrid({
 
   function bulkMoveTo(folderId: string) {
     setMoveOpen(false);
-    if (sel.size === 0) return;
-    bulkM.mutate({ action: "move", folderId: folderId || null, ids: [...sel] });
+    const ids = moveIds ?? [...sel];
+    setMoveIds(null);
+    if (ids.length === 0) return;
+    bulkM.mutate({ action: "move", folderId: folderId || null, ids });
   }
 
   async function newFolder() {
@@ -715,6 +823,16 @@ export function VideoGrid({
         >
           내가 올린 것
         </button>
+        <button
+          onClick={() => setFav((v) => !v)}
+          className={`h-9 shrink-0 rounded-lg border px-3 text-[13px] font-medium transition-colors ${
+            fav
+              ? "border-primary bg-weak-bg text-weak-fg"
+              : "border-border text-body hover:border-primary"
+          }`}
+        >
+          ★ 즐겨찾기
+        </button>
         <Dropdown
           ariaLabel="기간"
           value={days}
@@ -790,18 +908,18 @@ export function VideoGrid({
           <p className="mt-4 text-[16px] font-semibold text-foreground">
             {q
               ? "검색 결과가 없어요"
-              : mine || days || kind
+              : mine || fav || days || kind
                 ? "조건에 맞는 항목이 없어요"
                 : "아직 올린 영상이 없어요"}
           </p>
           <p className="mt-1 text-[14px] text-muted">
             {q
               ? "다른 제목으로 찾아보세요."
-              : mine || days || kind
+              : mine || fav || days || kind
                 ? "필터를 바꾸거나 초기화해보세요."
                 : "첫 영상을 올려보세요."}
           </p>
-          {!q && !mine && !days && !kind && (
+          {!q && !mine && !fav && !days && !kind && (
             <Link
               href={folderId ? `/upload?folderId=${folderId}` : "/upload"}
               className="mt-5"
@@ -825,6 +943,10 @@ export function VideoGrid({
                   href={`/v/${v.id}`}
                   draggable={!reorderMode}
                   onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setCtx({ x: e.clientX, y: e.clientY, v });
+                  }}
                   onClick={(e) => {
                     if (reorderMode) {
                       if (draggedRef.current) e.preventDefault();
@@ -881,6 +1003,21 @@ export function VideoGrid({
                       {new Date(v.createdAt).toLocaleDateString("ko-KR")}
                     </p>
                   </div>
+                  {!reorderMode && !selMode && (
+                    <button
+                      aria-label={v.favorited ? "즐겨찾기 해제" : "즐겨찾기"}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleFav(v);
+                      }}
+                      className={`shrink-0 px-1 text-[15px] leading-none ${
+                        v.favorited ? "text-amber-400" : "text-muted/40 hover:text-muted"
+                      }`}
+                    >
+                      {v.favorited ? "★" : "☆"}
+                    </button>
+                  )}
                 </Link>
               );
             }
@@ -889,6 +1026,12 @@ export function VideoGrid({
                 href={`/v/${v.id}`}
                 draggable={!reorderMode}
                 onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setCtx({ x: e.clientX, y: e.clientY, v });
+                }}
+                onMouseEnter={() => enterCard(v)}
+                onMouseLeave={leaveCard}
                 onClick={(e) => {
                   if (reorderMode) {
                     if (draggedRef.current) e.preventDefault();
@@ -930,6 +1073,16 @@ export function VideoGrid({
                       {v.kind === "image" ? <IconFilm /> : <IconPlay />}
                     </div>
                   )}
+                  {hoverId === v.id && previewUrls.current.get(v.id) && (
+                    <video
+                      src={previewUrls.current.get(v.id)}
+                      className="absolute inset-0 size-full bg-black object-cover"
+                      muted
+                      loop
+                      autoPlay
+                      playsInline
+                    />
+                  )}
                   {v.durationSec != null && (
                     <span className="absolute bottom-2 right-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
                       {humanDuration(v.durationSec)}
@@ -945,6 +1098,22 @@ export function VideoGrid({
                       다운로드 전용
                     </span>
                   )}
+                  <button
+                    aria-label={v.favorited ? "즐겨찾기 해제" : "즐겨찾기"}
+                    hidden={reorderMode || selMode}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleFav(v);
+                    }}
+                    className={`absolute right-2 top-2 z-10 grid size-7 place-items-center rounded-full bg-foreground/45 text-[15px] leading-none backdrop-blur transition-opacity ${
+                      v.favorited
+                        ? "text-amber-300 opacity-100"
+                        : "text-white opacity-0 group-hover:opacity-100"
+                    }`}
+                  >
+                    {v.favorited ? "★" : "☆"}
+                  </button>
                 </div>
                 <div className="p-4">
                   <EditableTitle
@@ -1285,6 +1454,110 @@ export function VideoGrid({
         </motion.div>
       )}
       </AnimatePresence>
+
+      {ctx && (
+        <div
+          className="fixed z-50 min-w-[150px] overflow-hidden rounded-xl border border-border bg-canvas py-1 shadow-[0_12px_32px_-8px_rgba(25,31,40,0.25)]"
+          style={{
+            left: Math.min(ctx.x, (typeof window !== "undefined" ? window.innerWidth : 9999) - 170),
+            top: Math.min(ctx.y, (typeof window !== "undefined" ? window.innerHeight : 9999) - 150),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(() => {
+            const v = ctx.v;
+            const item = "block w-full px-3 py-2 text-left text-[13px] hover:bg-surface";
+            return (
+              <>
+                <button
+                  className={`${item} text-body`}
+                  onClick={() => {
+                    setCtx(null);
+                    window.open(`/v/${v.id}`, "_blank", "noopener");
+                  }}
+                >
+                  새 탭에서 열기
+                </button>
+                <button
+                  className={`${item} text-body`}
+                  onClick={() => {
+                    setCtx(null);
+                    toggleFav(v);
+                  }}
+                >
+                  {v.favorited ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+                </button>
+                <button className={`${item} text-body`} onClick={() => ctxDownload(v)}>
+                  다운로드
+                </button>
+                {canEdit(v) && (
+                  <>
+                    <button className={`${item} text-body`} onClick={() => ctxRename(v)}>
+                      이름 변경
+                    </button>
+                    <button
+                      className={`${item} text-body`}
+                      onClick={() => {
+                        setCtx(null);
+                        setShareVideo(v);
+                      }}
+                    >
+                      공유 링크
+                    </button>
+                    <button
+                      className={`${item} text-body`}
+                      onClick={() => {
+                        setCtx(null);
+                        setMoveIds([v.id]);
+                        setMoveOpen(true);
+                      }}
+                    >
+                      폴더로 이동
+                    </button>
+                    {folderId && v.kind === "video" && v.thumbUrl && (
+                      <button
+                        className={`${item} text-body`}
+                        onClick={() => {
+                          setCtx(null);
+                          coverM.mutate(v.id);
+                        }}
+                      >
+                        폴더 커버로 지정
+                      </button>
+                    )}
+                    <button className={`${item} text-danger`} onClick={() => ctxDelete(v)}>
+                      삭제
+                    </button>
+                  </>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {shareVideo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4"
+          onClick={() => setShareVideo(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-canvas p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[15px] font-semibold text-foreground">공유 링크</p>
+            <p className="mt-0.5 truncate text-[13px] text-muted">{shareVideo.title}</p>
+            <div className="mt-3">
+              <SharePanel videoId={shareVideo.id} />
+            </div>
+            <div className="mt-4 text-right">
+              <Button variant="ghost" size="md" onClick={() => setShareVideo(null)}>
+                닫기
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

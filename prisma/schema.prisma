@@ -71,6 +71,8 @@ model Video {
   durationSec      Int?
   thumbKey         String?
   playableInBrowser Boolean?
+  proxyKey         String?     // h264 mp4 generated for a non-web-playable source
+
   viewCount        Int         @default(0)
   position         Int?
   uploadedBy       String?
@@ -80,6 +82,31 @@ model Video {
   upload           Upload?
   shareLinks       ShareLink[]
   coverForFolders  Folder[]    @relation("FolderCover")
+  comments         Comment[]
+  favorites        Favorite[]
+}
+
+model Favorite {
+  userEmail String
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userEmail, videoId])
+  @@index([userEmail])
+}
+
+model Comment {
+  id        String    @id @default(uuid())
+  videoId   String
+  video     Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  author    String // user email
+  body      String
+  atSec     Int? // timestamp in the video this comment points at
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([videoId, createdAt])
 }
 
 model Upload {
