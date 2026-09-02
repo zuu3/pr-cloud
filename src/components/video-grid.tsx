@@ -103,6 +103,9 @@ function EditableTitle({
       <p
         className={`${className} ${canEdit ? "cursor-text" : ""}`}
         title={canEdit ? "더블클릭해서 이름 바꾸기" : undefined}
+        // block the card link so clicking the title never navigates
+        onClick={canEdit ? (e) => (e.preventDefault(), e.stopPropagation()) : undefined}
+        onMouseDown={canEdit ? (e) => e.stopPropagation() : undefined}
         onDoubleClick={
           canEdit
             ? (e) => {
@@ -342,6 +345,8 @@ export function VideoGrid({
       600,
     );
   }
+
+  const draggedRef = useRef(false); // true while / just after a reorder drag
 
   const selAnchor = useRef<number | null>(null);
   function toggleAt(index: number, shift: boolean) {
@@ -743,6 +748,10 @@ export function VideoGrid({
                   draggable={!reorderMode}
                   onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
                   onClick={(e) => {
+                    if (reorderMode) {
+                      if (draggedRef.current) e.preventDefault();
+                      return;
+                    }
                     if (selMode) {
                       e.preventDefault();
                       toggleAt(i, e.shiftKey);
@@ -803,6 +812,10 @@ export function VideoGrid({
                 draggable={!reorderMode}
                 onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
                 onClick={(e) => {
+                  if (reorderMode) {
+                    if (draggedRef.current) e.preventDefault();
+                    return;
+                  }
                   if (selMode) {
                     e.preventDefault();
                     toggleAt(i, e.shiftKey);
@@ -891,6 +904,14 @@ export function VideoGrid({
                       value={v}
                       as="div"
                       className="cursor-grab touch-none active:cursor-grabbing"
+                      onDragStart={() => {
+                        draggedRef.current = true;
+                      }}
+                      onDragEnd={() => {
+                        setTimeout(() => {
+                          draggedRef.current = false;
+                        }, 60);
+                      }}
                     >
                       {renderItem(v, i)}
                     </Reorder.Item>
