@@ -3,7 +3,7 @@ import { startTestDb } from "../helpers/pg";
 import { mockSession, req } from "../helpers/req";
 
 let db: Awaited<ReturnType<typeof startTestDb>>;
-const genSpy = vi.fn(async () => {});
+const genSpy = vi.fn(async (_id: string) => {});
 
 beforeAll(async () => {
   db = await startTestDb();
@@ -53,19 +53,26 @@ describe("POST /api/admin/regenerate-media", () => {
     expect(genSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("?transcode=1 targets non-web-playable videos with no proxy yet", async () => {
+  it("?transcode=1 drains only non-web-playable videos with no proxy yet", async () => {
     mockSession({ email: "admin@school", role: "admin" });
-    await mk({ playableInBrowser: false, proxyKey: null }); // needs a proxy
+    const a = await mk({ playableInBrowser: false, proxyKey: null }); // needs a proxy
     await mk({ playableInBrowser: false, proxyKey: "p/2.mp4" }); // already has one — skip
     await mk({ playableInBrowser: true, proxyKey: null }); // plays fine — skip
     await mk({ playableInBrowser: null, proxyKey: null }); // unknown — skip
+
+    // the drain loops until nothing is left; stub generateMedia to mark the proxy
+    genSpy.mockImplementation(async (id: string) => {
+      await db.prisma.video.update({ where: { id }, data: { proxyKey: `p/${id}.mp4` } });
+    });
 
     const { POST } = await import("@/app/api/admin/regenerate-media/route");
     const r = await POST(
       req("/api/admin/regenerate-media?transcode=1", { method: "POST" }),
     );
-    expect((await r.json()).queued).toBe(1);
-    await new Promise((res) => setTimeout(res, 50));
+    expect((await r.json()).pending).toBe(1);
+    await new Promise((res) => setTimeout(res, 200));
     expect(genSpy).toHaveBeenCalledTimes(1);
+    expect(genSpy).toHaveBeenCalledWith(a.id);
+    genSpy.mockImplementation(async () => {});
   });
 });

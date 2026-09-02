@@ -28,3 +28,18 @@ source_context: "/Users/juhyun/orca/workspaces/pr-cloud/rabbitfish/src/component
 ```
 
 Introduced off-scale border radius rounded-full(9999px) in /Users/juhyun/orca/workspaces/pr-cloud/rabbitfish/src/components/video-grid.tsx — not in DESIGN.md radius scale
+
+## 2026-09-02T08:33:17.169Z — introduced-off-scale-border-radius-round
+
+```omd-meta
+id: pref_mtju9pwx_2a694f8c
+timestamp: 2026-09-02T08:33:17.169Z
+scope: visualTheme
+signal: ambient
+confidence: inferred
+status: pending
+source_agent: claude-code
+source_context: "/Users/juhyun/orca/workspaces/pr-cloud/rabbitfish/src/app/(app)/admin/admin-panel.tsx"
+```
+
+Introduced off-scale border radius rounded-full(9999px) in /Users/juhyun/orca/workspaces/pr-cloud/rabbitfish/src/app/(app)/admin/admin-panel.tsx — not in DESIGN.md radius scale

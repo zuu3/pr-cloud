@@ -41,14 +41,20 @@ export function AdminPanel() {
     onError: (e: Error) => toast.show(e.message, "err"),
   });
 
+  const { data: tc } = useQuery<{ pending: number; draining: boolean }>({
+    queryKey: ["transcode-status"],
+    queryFn: () => apiFetch("/api/admin/regenerate-media"),
+    refetchInterval: 5000,
+  });
+
   const transcode = useMutation({
     mutationFn: () =>
       apiFetch("/api/admin/regenerate-media?transcode=1", { method: "POST" }),
-    onSuccess: (r: { queued: number }) =>
+    onSuccess: (r: { pending: number; running: boolean }) =>
       toast.show(
-        r.queued > 0
-          ? `${r.queued}개 영상을 브라우저 재생용으로 변환하고 있어요 (몇 분 걸려요)`
-          : "변환할 영상이 없어요",
+        r.pending === 0
+          ? "변환할 영상이 없어요"
+          : `남은 ${r.pending}개를 하나씩 변환하고 있어요. 창을 닫아도 계속돼요.`,
       ),
     onError: (e: Error) => toast.show(e.message, "err"),
   });
@@ -89,6 +95,17 @@ export function AdminPanel() {
           </Button>
         </div>
       </div>
+
+      {tc && (tc.pending > 0 || tc.draining) && (
+        <p className="mt-3 flex items-center gap-2 text-[13px] text-muted">
+          {tc.draining && (
+            <span className="inline-block size-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          )}
+          {tc.draining
+            ? `브라우저 재생용 변환 중 · 남은 ${tc.pending}개`
+            : `브라우저에서 못 여는 영상 ${tc.pending}개 — "브라우저 재생용 변환"을 누르세요`}
+        </p>
+      )}
 
       {!s ? (
         <p className="mt-4 text-[13px] text-muted">불러오는 중…</p>
