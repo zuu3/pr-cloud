@@ -88,6 +88,14 @@ async function buildProxy(videoId: string, srcUrl: string): Promise<string | nul
   const ffArgs = [
     "-nostdin",
     "-threads", "1", // leave a core for the web server on this 2-vCPU box
+    // the source is read over HTTP(S); without these a stalled read hangs
+    // ffmpeg (and pins ~1 GB RSS) until the hard kill. Bail / retry instead.
+    "-rw_timeout", "45000000", // 45s with no progress => error
+    "-reconnect", "1",
+    "-reconnect_streamed", "1",
+    "-reconnect_on_network_error", "1",
+    "-reconnect_on_http_error", "5xx",
+    "-reconnect_delay_max", "10",
     "-i", srcUrl,
     // a browser proxy doesn't need 4K — cap at 1080p (only downscales), and
     // force 8-bit 4:2:0 so 10-bit / 4:2:2 HEVC sources still play everywhere
@@ -107,7 +115,7 @@ async function buildProxy(videoId: string, srcUrl: string): Promise<string | nul
     stderr = (stderr + d.toString()).slice(-4000);
   });
 
-  const kill = setTimeout(() => ff.kill("SIGKILL"), 30 * 60_000);
+  const kill = setTimeout(() => ff.kill("SIGKILL"), 20 * 60_000);
   let uploadId: string | undefined;
   try {
     const created = await s3Internal.send(
