@@ -23,6 +23,7 @@ type Video = {
   title: string;
   sizeBytes: number | null;
   originalFilename: string;
+  kind: "video" | "image";
   durationSec: number | null;
   thumbUrl: string | null;
   playableInBrowser: boolean | null;
@@ -54,6 +55,12 @@ const DATE_RANGES = [
   ["30", "최근 30일"],
 ] as const;
 
+const KINDS = [
+  ["", "영상 + 사진"],
+  ["video", "영상만"],
+  ["image", "사진만"],
+] as const;
+
 export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder[] }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -67,6 +74,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
   const [sort, setSort] = useState(params.get("sort") ?? "new");
   const [mine, setMine] = useState(params.get("mine") === "1");
   const [days, setDays] = useState(params.get("days") ?? "");
+  const [kind, setKind] = useState(params.get("kind") ?? "");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [selMode, setSelMode] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -140,6 +148,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     if (sort !== "new") sp.set("sort", sort);
     if (mine) sp.set("mine", "1");
     if (days) sp.set("days", days);
+    if (kind) sp.set("kind", kind);
     for (const [k, v] of Object.entries(extra ?? {})) sp.set(k, v);
     return sp;
   }
@@ -163,7 +172,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     }, 280);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, folderId, sort, mine, days, router]);
+  }, [q, folderId, sort, mine, days, kind, router]);
 
   async function reload() {
     const res = await fetch(`/api/videos?${buildParams()}`);
@@ -183,7 +192,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
     window.addEventListener("upload:done", h);
     return () => window.removeEventListener("upload:done", h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, folderId, sort, mine, days]);
+  }, [q, folderId, sort, mine, days, kind]);
 
   // keyboard: "/" focuses search, Esc leaves select mode
   useEffect(() => {
@@ -521,6 +530,13 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           options={DATE_RANGES.map(([v, label]) => ({ value: v, label }))}
           className="w-[116px] shrink-0"
         />
+        <Dropdown
+          ariaLabel="종류"
+          value={kind}
+          onChange={setKind}
+          options={KINDS.map(([v, label]) => ({ value: v, label }))}
+          className="w-[116px] shrink-0"
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -647,7 +663,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                         />
                       ) : (
                         <div className="grid size-full place-items-center text-[16px] text-muted/40">
-                          <IconPlay />
+                          {v.kind === "image" ? <IconFilm /> : <IconPlay />}
                         </div>
                       )}
                       {v.playableInBrowser === false && (
@@ -659,6 +675,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-medium text-foreground">{v.title}</p>
                       <p className="mt-0.5 truncate text-[12px] text-muted">
+                        {v.kind === "image" ? "사진 · " : ""}
                         {humanSize(v.sizeBytes)} · 조회 {v.viewCount}
                         {v.durationSec != null ? ` · ${humanDuration(v.durationSec)}` : ""} ·{" "}
                         {new Date(v.createdAt).toLocaleDateString("ko-KR")}
@@ -715,7 +732,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                     />
                   ) : (
                     <div className="grid size-full place-items-center text-[28px] text-muted/40">
-                      <IconPlay />
+                      {v.kind === "image" ? <IconFilm /> : <IconPlay />}
                     </div>
                   )}
                   {v.durationSec != null && (
@@ -723,7 +740,12 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                       {humanDuration(v.durationSec)}
                     </span>
                   )}
-                  {v.playableInBrowser === false && (
+                  {v.kind === "image" && (
+                    <span className="absolute left-2 top-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                      사진
+                    </span>
+                  )}
+                  {v.kind === "video" && v.playableInBrowser === false && (
                     <span className="absolute left-2 top-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
                       다운로드 전용
                     </span>

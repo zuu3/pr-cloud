@@ -76,6 +76,15 @@ export async function generateMedia(videoId: string): Promise<void> {
     const video = await prisma.video.findUnique({ where: { id: videoId } });
     if (!video || video.status !== "ready") return;
 
+    // a photo is its own thumbnail — no ffmpeg
+    if (video.kind === "image") {
+      await prisma.video.update({
+        where: { id: videoId },
+        data: { thumbKey: video.s3Key, playableInBrowser: true },
+      });
+      return;
+    }
+
     const url = await signInternalGetUrl(video.s3Key);
     const { duration, vcodec } = await probe(url);
     const playable = isWebPlayable(vcodec, extOf(video.originalFilename));

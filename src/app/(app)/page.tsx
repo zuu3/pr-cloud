@@ -19,6 +19,7 @@ export default async function Home({
     sort?: string;
     mine?: string;
     days?: string;
+    kind?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -28,6 +29,7 @@ export default async function Home({
   if (sp.sort) qs.set("sort", sp.sort);
   if (sp.mine) qs.set("mine", sp.mine);
   if (sp.days) qs.set("days", sp.days);
+  if (sp.kind) qs.set("kind", sp.kind);
 
   const [list, folders] = await Promise.all([api(`/api/videos?${qs}`), api(`/api/folders`)]);
   return (

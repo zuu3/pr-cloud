@@ -37,7 +37,16 @@ export default async function SharedFolderVideo({
           {video.title}
         </h1>
 
-        {video.playableInBrowser === false ? (
+        {video.mediaKind === "image" ? (
+          <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-black">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={src}
+              alt={video.title}
+              className="mx-auto max-h-[75vh] w-full object-contain"
+            />
+          </div>
+        ) : video.playableInBrowser === false ? (
           <div className="mt-4 grid aspect-video place-items-center rounded-2xl border border-border bg-black/90 px-6 text-center">
             <div>
               <p className="text-[14px] font-medium text-white">

@@ -33,7 +33,10 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         ]);
 
       const a = makeAdapter();
-      const u = new Uppy({ autoProceed: true, restrictions: { allowedFileTypes: ["video/*"] } });
+      const u = new Uppy({
+        autoProceed: true,
+        restrictions: { allowedFileTypes: ["video/*", "image/*"] },
+      });
       u.use(AwsS3, {
         shouldUseMultipart: (file) => a.shouldUseMultipart(file),
         // up to 10 parts in parallel (default 6) — fills a fast LAN link
@@ -158,7 +161,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       if (/already added|noDuplicates/i.test(msg)) {
         toastRef.current.show(`${f.name}은(는) 이미 목록에 있어요`, "err");
       } else if (/allowedFileTypes|not an allowed/i.test(msg)) {
-        toastRef.current.show(`${f.name}은(는) 영상 파일이 아니에요`, "err");
+        toastRef.current.show(`${f.name}은(는) 영상·사진 파일이 아니에요`, "err");
       } else {
         toastRef.current.show(`${f.name}을(를) 추가하지 못했어요`, "err");
       }

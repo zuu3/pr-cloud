@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     const sort = (p.get("sort") ?? "new") as SortKey;
     const mine = p.get("mine") === "1";
     const days = Number(p.get("days"));
+    const kind = p.get("kind");
 
     const where: Prisma.VideoWhereInput = trash
       ? { status: "ready", deletedAt: { not: null } }
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     if (!trash && Number.isFinite(days) && days > 0) {
       where.createdAt = { gte: new Date(Date.now() - days * 86_400_000) };
     }
+    if (kind === "video" || kind === "image") where.kind = kind;
 
     const rows = await prisma.video.findMany({
       where,
@@ -51,6 +53,7 @@ export async function GET(request: Request) {
         sizeBytes: true,
         contentType: true,
         originalFilename: true,
+        kind: true,
         durationSec: true,
         thumbKey: true,
         playableInBrowser: true,

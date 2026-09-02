@@ -24,10 +24,11 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
         select: { id: true, name: true, parentId: true },
       })
     : [];
+  const isImage = video.kind === "image";
   const poster = video.thumbKey ? `/api/thumb/${video.id}` : null;
   // hand the player a ready-to-use URL so playback starts without an extra RTT
   const playbackUrl =
-    video.playableInBrowser === false
+    !isImage && video.playableInBrowser === false
       ? null
       : await signGetUrl(video.s3Key, { disposition: "inline" });
   // a visit counts as a view
@@ -57,13 +58,22 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
       />
       <p className="mt-1.5 text-[13px] text-muted">{meta}</p>
 
-      <div className="mt-5 overflow-hidden rounded-2xl border border-border">
-        <VideoPlayer
-          videoId={video.id}
-          poster={poster}
-          playable={video.playableInBrowser}
-          initialUrl={playbackUrl}
-        />
+      <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-black">
+        {isImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={playbackUrl ?? poster ?? ""}
+            alt={video.title}
+            className="mx-auto max-h-[75vh] w-full object-contain"
+          />
+        ) : (
+          <VideoPlayer
+            videoId={video.id}
+            poster={poster}
+            playable={video.playableInBrowser}
+            initialUrl={playbackUrl}
+          />
+        )}
       </div>
 
       <VideoActions videoId={video.id} canManage={canManage} />
