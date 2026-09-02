@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FolderMenu } from "@/components/folder-menu";
+import { GridCardsSkeleton } from "@/components/grid-skeleton";
 import { FolderPicker } from "@/components/folder-picker";
 import { SharePanel } from "@/components/share-panel";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -216,6 +217,7 @@ export function VideoGrid({
   const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false); // filter refetch in flight
   const first = useRef(true);
+  const firstFilter = useRef(true);
   const searchRef = useRef<HTMLInputElement>(null);
   const animateCards = useRef(true); // stagger only on first mount, not on refetch
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -285,28 +287,42 @@ export function VideoGrid({
     return sp;
   }
 
+  async function runFetch() {
+    const sp = buildParams();
+    router.replace(sp.toString() ? `/?${sp}` : "/");
+    const res = await fetch(`/api/videos?${sp}`);
+    if (res.ok) {
+      const page: Page = await res.json();
+      animateCards.current = false; // no entry stagger on a filter refetch
+      setVideos(page.videos);
+      setCursor(page.nextCursor);
+      exitSelect();
+    }
+    setLoading(false);
+  }
+
+  // text search: debounced, keep the current list visible while typing
   useEffect(() => {
     if (first.current) {
       first.current = false;
       return;
     }
-    const t = setTimeout(async () => {
-      const sp = buildParams();
-      router.replace(sp.toString() ? `/?${sp}` : "/");
-      setLoading(true);
-      const res = await fetch(`/api/videos?${sp}`);
-      if (res.ok) {
-        const page: Page = await res.json();
-        animateCards.current = false; // no entry stagger on a filter refetch
-        setVideos(page.videos);
-        setCursor(page.nextCursor);
-        exitSelect();
-      }
-      setLoading(false);
-    }, 280);
+    const t = setTimeout(() => void runFetch(), 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, folderId, sort, mine, days, kind, router]);
+  }, [q]);
+
+  // filter toggles: fire immediately and show the skeleton
+  useEffect(() => {
+    if (firstFilter.current) {
+      firstFilter.current = false;
+      return;
+    }
+    setVideos([]);
+    setLoading(true);
+    void runFetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort, mine, days, kind]);
 
   async function reload() {
     const res = await fetch(`/api/videos?${buildParams()}`);
@@ -765,17 +781,7 @@ export function VideoGrid({
       </div>
 
       {videos.length === 0 && loading ? (
-        <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="overflow-hidden rounded-2xl border border-border">
-              <div className="aspect-video animate-pulse bg-surface" />
-              <div className="space-y-2 p-4">
-                <div className="h-4 w-3/4 animate-pulse rounded bg-surface" />
-                <div className="h-3 w-1/2 animate-pulse rounded bg-surface" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <GridCardsSkeleton />
       ) : videos.length === 0 ? (
         <div className="mt-20 flex flex-col items-center text-center">
           <div className="flex size-16 items-center justify-center rounded-2xl bg-surface text-[26px] text-muted">
