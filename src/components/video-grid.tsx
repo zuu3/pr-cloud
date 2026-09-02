@@ -222,6 +222,14 @@ export function VideoGrid({
   const animateCards = useRef(true); // stagger only on first mount, not on refetch
   const [view, setView] = useState<"grid" | "list">("grid");
 
+  // right-click card menu
+  const [ctx, setCtx] = useState<{ x: number; y: number; v: Video } | null>(null);
+  // hover-to-preview (grid view, video only)
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewUrls = useRef<Map<string, string>>(new Map());
+  const [, forcePreview] = useState(0);
+
   useEffect(() => {
     try {
       const v = localStorage.getItem("videoView");
@@ -463,6 +471,88 @@ export function VideoGrid({
     },
     onError: (e: Error) => toast.show(e.message, "err"),
   });
+
+  // ---- right-click card menu ----
+  useEffect(() => {
+    if (!ctx) return;
+    const close = () => setCtx(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setCtx(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [ctx]);
+
+  async function ctxRename(v: Video) {
+    setCtx(null);
+    const name = await dialog.prompt({
+      title: "이름 변경",
+      initial: v.title,
+      maxLength: 200,
+      confirmText: "저장",
+    });
+    const t = name?.trim();
+    if (!t || t === v.title) return;
+    try {
+      await apiFetch(`/api/videos/${v.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: t }),
+      });
+      patchTitle(v.id, t);
+      toast.show("제목을 바꿨어요");
+    } catch (e) {
+      toast.show((e as Error).message, "err");
+    }
+  }
+
+  async function ctxDelete(v: Video) {
+    setCtx(null);
+    const ok = await dialog.confirm({
+      title: "이 항목을 삭제할까요?",
+      body: v.title,
+      danger: true,
+      confirmText: "삭제",
+    });
+    if (ok) bulkM.mutate({ action: "trash", ids: [v.id] });
+  }
+
+  async function ctxDownload(v: Video) {
+    setCtx(null);
+    try {
+      const r = await apiFetch(`/api/videos/${v.id}/url?disposition=attachment`);
+      window.location.href = r.url;
+    } catch (e) {
+      toast.show((e as Error).message, "err");
+    }
+  }
+
+  // ---- hover-to-preview ----
+  function enterCard(v: Video) {
+    if (v.kind !== "video" || v.playableInBrowser === false) return;
+    hoverTimer.current = setTimeout(async () => {
+      setHoverId(v.id);
+      if (!previewUrls.current.has(v.id)) {
+        try {
+          const r = await apiFetch(`/api/videos/${v.id}/url?disposition=inline`);
+          previewUrls.current.set(v.id, r.url);
+          forcePreview((n) => n + 1);
+        } catch {
+          /* preview is optional */
+        }
+      }
+    }, 400);
+  }
+  function leaveCard() {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setHoverId(null);
+  }
 
   const newFolderM = useMutation({
     mutationFn: (name: string) =>
@@ -825,6 +915,10 @@ export function VideoGrid({
                   href={`/v/${v.id}`}
                   draggable={!reorderMode}
                   onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setCtx({ x: e.clientX, y: e.clientY, v });
+                  }}
                   onClick={(e) => {
                     if (reorderMode) {
                       if (draggedRef.current) e.preventDefault();
@@ -889,6 +983,12 @@ export function VideoGrid({
                 href={`/v/${v.id}`}
                 draggable={!reorderMode}
                 onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setCtx({ x: e.clientX, y: e.clientY, v });
+                }}
+                onMouseEnter={() => enterCard(v)}
+                onMouseLeave={leaveCard}
                 onClick={(e) => {
                   if (reorderMode) {
                     if (draggedRef.current) e.preventDefault();
@@ -929,6 +1029,16 @@ export function VideoGrid({
                     <div className="grid size-full place-items-center text-[28px] text-muted/40">
                       {v.kind === "image" ? <IconFilm /> : <IconPlay />}
                     </div>
+                  )}
+                  {hoverId === v.id && previewUrls.current.get(v.id) && (
+                    <video
+                      src={previewUrls.current.get(v.id)}
+                      className="absolute inset-0 size-full bg-black object-cover"
+                      muted
+                      loop
+                      autoPlay
+                      playsInline
+                    />
                   )}
                   {v.durationSec != null && (
                     <span className="absolute bottom-2 right-2 rounded-md bg-foreground/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
@@ -1285,6 +1395,40 @@ export function VideoGrid({
         </motion.div>
       )}
       </AnimatePresence>
+
+      {ctx && (
+        <div
+          className="fixed z-50 min-w-[150px] overflow-hidden rounded-xl border border-border bg-canvas py-1 shadow-[0_12px_32px_-8px_rgba(25,31,40,0.25)]"
+          style={{
+            left: Math.min(ctx.x, (typeof window !== "undefined" ? window.innerWidth : 9999) - 170),
+            top: Math.min(ctx.y, (typeof window !== "undefined" ? window.innerHeight : 9999) - 150),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="block w-full px-3 py-2 text-left text-[13px] text-body hover:bg-surface"
+            onClick={() => ctxDownload(ctx.v)}
+          >
+            다운로드
+          </button>
+          {canEdit(ctx.v) && (
+            <button
+              className="block w-full px-3 py-2 text-left text-[13px] text-body hover:bg-surface"
+              onClick={() => ctxRename(ctx.v)}
+            >
+              이름 변경
+            </button>
+          )}
+          {canEdit(ctx.v) && (
+            <button
+              className="block w-full px-3 py-2 text-left text-[13px] text-danger hover:bg-surface"
+              onClick={() => ctxDelete(ctx.v)}
+            >
+              삭제
+            </button>
+          )}
+        </div>
+      )}
     </main>
   );
 }

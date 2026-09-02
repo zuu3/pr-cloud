@@ -18,6 +18,8 @@ const schema = z.object({
   PRESIGN_PART_TTL: z.coerce.number().int().positive().default(3600),
   PRESIGN_GET_TTL: z.coerce.number().int().positive().default(21600),
   SINGLE_PUT_MAX_BYTES: z.coerce.number().int().positive().default(83886080),
+  // above this source size we skip building a browser proxy (transcode cost + temp disk). 0 = never.
+  PROXY_MAX_SOURCE_BYTES: z.coerce.number().int().nonnegative().default(2147483648),
   // optional storage budget shown on the admin dashboard (e.g. 5TB = 5497558138880)
   STORAGE_QUOTA_BYTES: z.preprocess(
     (v) => (v === "" || v == null ? undefined : v),

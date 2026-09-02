@@ -20,7 +20,9 @@ export async function GET(request: Request, { params }: Ctx) {
 
     // view counting lives on the detail page load, not here
 
-    const url = await signGetUrl(video.s3Key, {
+    const key =
+      disposition === "attachment" ? video.s3Key : (video.proxyKey ?? video.s3Key);
+    const url = await signGetUrl(key, {
       disposition,
       filename: disposition === "attachment" ? video.originalFilename : undefined,
     });

@@ -1,7 +1,11 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { readFile, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "./db";
+import { env } from "./env";
 import { s3Internal, BUCKET, signInternalGetUrl } from "./s3";
 import { extOf } from "./uploads";
 
@@ -67,6 +71,40 @@ async function grabPoster(url: string, atSec: number): Promise<Buffer | null> {
 }
 
 /**
+ * Transcode a non-web-playable source to a faststart h264/aac mp4 and upload it
+ * as the video's proxy. Heavy (minutes) — runs only from the background job and
+ * only for sources under PROXY_MAX_SOURCE_BYTES. Returns the proxy key or null.
+ */
+async function buildProxy(videoId: string, srcUrl: string): Promise<string | null> {
+  const out = join(tmpdir(), `proxy-${videoId}.mp4`);
+  try {
+    await run(
+      FFMPEG,
+      [
+        "-y",
+        "-i", srcUrl,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "160k",
+        "-movflags", "+faststart",
+        out,
+      ],
+      { timeout: 30 * 60_000, maxBuffer: 8 << 20 },
+    );
+    const body = await readFile(out);
+    const key = `promo-video/proxy/${videoId}.mp4`;
+    await s3Internal.send(
+      new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: body, ContentType: "video/mp4" }),
+    );
+    return key;
+  } catch (e) {
+    console.warn("buildProxy failed", videoId, e);
+    return null;
+  } finally {
+    await unlink(out).catch(() => {});
+  }
+}
+
+/**
  * Best-effort: extract duration + a poster frame for a ready video and persist
  * them. Never throws — the video is fully usable without a thumbnail.
  * ffmpeg reads the object over a ranged HTTP GET, so it only pulls a few MB.
@@ -85,7 +123,7 @@ export async function generateMedia(videoId: string): Promise<void> {
       return;
     }
 
-    const url = await signInternalGetUrl(video.s3Key);
+    const url = await signInternalGetUrl(video.s3Key, 6 * 3600);
     const { duration, vcodec } = await probe(url);
     const playable = isWebPlayable(vcodec, extOf(video.originalFilename));
     const at = duration ? Math.min(3, Math.max(0, Math.floor(duration / 2))) : 1;
@@ -113,6 +151,19 @@ export async function generateMedia(videoId: string): Promise<void> {
           playableInBrowser: playable ?? undefined,
         },
       });
+    }
+
+    // non-web-playable source → try to build an h264 proxy so it plays in-browser
+    const cap = env.PROXY_MAX_SOURCE_BYTES;
+    const srcBytes = video.sizeBytes == null ? null : Number(video.sizeBytes);
+    if (playable === false && cap > 0 && (srcBytes == null || srcBytes <= cap)) {
+      const proxyKey = await buildProxy(videoId, url);
+      if (proxyKey) {
+        await prisma.video.update({
+          where: { id: videoId },
+          data: { proxyKey, playableInBrowser: true },
+        });
+      }
     }
   } catch (e) {
     console.warn("generateMedia failed", videoId, e);

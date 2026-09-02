@@ -10,6 +10,8 @@ import { VideoActions } from "@/components/video-actions";
 import { SharePanel } from "@/components/share-panel";
 import { MoveToFolder } from "@/components/move-to-folder";
 import { EditableMeta } from "@/components/editable-meta";
+import { DetailNav } from "@/components/detail-nav";
+import { Comments } from "@/components/comments";
 
 export default async function VideoDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,7 +20,7 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
   if (!video || video.status !== "ready" || video.deletedAt) notFound();
 
   const canManage = user.role === "admin" || video.uploadedBy === user.email;
-  const [folders, parentFolder] = await Promise.all([
+  const [folders, parentFolder, siblings] = await Promise.all([
     canManage
       ? prisma.folder.findMany({
           orderBy: { name: "asc" },
@@ -28,7 +30,16 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
     video.folderId
       ? prisma.folder.findUnique({ where: { id: video.folderId }, select: { name: true } })
       : Promise.resolve(null),
+    prisma.video.findMany({
+      where: { folderId: video.folderId ?? null, status: "ready", deletedAt: null },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { id: true },
+    }),
   ]);
+  const idx = siblings.findIndex((s) => s.id === video.id);
+  const prevId = idx > 0 ? siblings[idx - 1].id : null;
+  const nextId = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1].id : null;
+
   const backHref = video.folderId ? `/?folderId=${video.folderId}` : "/";
   const backLabel = parentFolder?.name ?? "보관함";
   const isImage = video.kind === "image";
@@ -37,7 +48,7 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
   const playbackUrl =
     !isImage && video.playableInBrowser === false
       ? null
-      : await signGetUrl(video.s3Key, { disposition: "inline" });
+      : await signGetUrl(video.proxyKey ?? video.s3Key, { disposition: "inline" });
   // a visit counts as a view
   void prisma.video
     .update({ where: { id }, data: { viewCount: { increment: 1 } } })
@@ -83,6 +94,8 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
         )}
       </div>
 
+      <DetailNav prevId={prevId} nextId={nextId} />
+
       <VideoActions videoId={video.id} canManage={canManage} />
 
       {canManage && (
@@ -91,6 +104,13 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
           <SharePanel videoId={video.id} />
         </div>
       )}
+
+      <Comments
+        videoId={video.id}
+        me={user.email}
+        canModerate={user.role === "admin"}
+        isImage={isImage}
+      />
     </main>
   );
 }

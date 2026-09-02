@@ -17,7 +17,7 @@ export async function GET(request: Request, { params }: Ctx) {
       return new Response("Not found", { status: 404 });
     }
 
-    const url = await signGetUrl(link.video.s3Key, {
+    const url = await signGetUrl(dl ? link.video.s3Key : (link.video.proxyKey ?? link.video.s3Key), {
       disposition: dl ? "attachment" : "inline",
       filename: dl ? link.video.originalFilename : undefined,
     });
