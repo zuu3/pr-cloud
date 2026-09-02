@@ -1076,11 +1076,16 @@ export function VideoGrid({
                   {hoverId === v.id && previewUrls.current.get(v.id) && (
                     <video
                       src={previewUrls.current.get(v.id)}
-                      className="absolute inset-0 size-full bg-black object-cover"
+                      poster={v.thumbUrl ?? undefined}
+                      className="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-200"
                       muted
                       loop
                       autoPlay
                       playsInline
+                      preload="auto"
+                      onPlaying={(e) => {
+                        e.currentTarget.style.opacity = "1";
+                      }}
                     />
                   )}
                   {v.durationSec != null && (
