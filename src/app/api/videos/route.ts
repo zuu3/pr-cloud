@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const mine = p.get("mine") === "1";
     const days = Number(p.get("days"));
     const kind = p.get("kind");
+    const favOnly = p.get("fav") === "1";
 
     const where: Prisma.VideoWhereInput = trash
       ? { status: "ready", deletedAt: { not: null } }
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
       where.createdAt = { gte: new Date(Date.now() - days * 86_400_000) };
     }
     if (kind === "video" || kind === "image") where.kind = kind;
+    if (!trash && favOnly) where.favorites = { some: { userEmail: user.email } };
 
     const rows = await prisma.video.findMany({
       where,
@@ -63,15 +65,17 @@ export async function GET(request: Request) {
         viewCount: true,
         createdAt: true,
         folderId: true,
+        favorites: { where: { userEmail: user.email }, select: { videoId: true } },
       },
     });
 
     const nextCursor = rows.length > 50 ? rows[49].id : null;
-    const videos = rows.slice(0, 50).map((v) => ({
+    const videos = rows.slice(0, 50).map(({ favorites, ...v }) => ({
       ...v,
       sizeBytes: v.sizeBytes == null ? null : Number(v.sizeBytes),
       thumbUrl: v.thumbKey ? `/api/thumb/${v.id}` : null,
       thumbKey: undefined,
+      favorited: favorites.length > 0,
     }));
     return json({ videos, nextCursor });
   });

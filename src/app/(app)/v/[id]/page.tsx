@@ -12,6 +12,7 @@ import { MoveToFolder } from "@/components/move-to-folder";
 import { EditableMeta } from "@/components/editable-meta";
 import { DetailNav } from "@/components/detail-nav";
 import { Comments } from "@/components/comments";
+import { FavButton } from "@/components/fav-button";
 
 export default async function VideoDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,7 +21,7 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
   if (!video || video.status !== "ready" || video.deletedAt) notFound();
 
   const canManage = user.role === "admin" || video.uploadedBy === user.email;
-  const [folders, parentFolder, siblings] = await Promise.all([
+  const [folders, parentFolder, siblings, favorite] = await Promise.all([
     canManage
       ? prisma.folder.findMany({
           orderBy: { name: "asc" },
@@ -34,6 +35,10 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
       where: { folderId: video.folderId ?? null, status: "ready", deletedAt: null },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { id: true },
+    }),
+    prisma.favorite.findUnique({
+      where: { userEmail_videoId: { userEmail: user.email, videoId: id } },
+      select: { videoId: true },
     }),
   ]);
   const idx = siblings.findIndex((s) => s.id === video.id);
@@ -74,7 +79,10 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
         description={video.description}
         canEdit={canManage}
       />
-      <p className="mt-1.5 text-[13px] text-muted">{meta}</p>
+      <div className="mt-1.5 flex items-center justify-between gap-3">
+        <p className="text-[13px] text-muted">{meta}</p>
+        <FavButton videoId={video.id} initial={favorite != null} />
+      </div>
 
       <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-black">
         {isImage ? (

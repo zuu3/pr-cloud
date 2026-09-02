@@ -83,6 +83,17 @@ model Video {
   shareLinks       ShareLink[]
   coverForFolders  Folder[]    @relation("FolderCover")
   comments         Comment[]
+  favorites        Favorite[]
+}
+
+model Favorite {
+  userEmail String
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userEmail, videoId])
+  @@index([userEmail])
 }
 
 model Comment {

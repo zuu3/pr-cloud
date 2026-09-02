@@ -18,6 +18,7 @@ type SP = {
   q?: string;
   sort?: string;
   mine?: string;
+  fav?: string;
   days?: string;
   kind?: string;
 };
@@ -28,6 +29,7 @@ async function Grid({ sp }: { sp: SP }) {
   if (sp.q) qs.set("q", sp.q);
   if (sp.sort) qs.set("sort", sp.sort);
   if (sp.mine) qs.set("mine", sp.mine);
+  if (sp.fav) qs.set("fav", sp.fav);
   if (sp.days) qs.set("days", sp.days);
   if (sp.kind) qs.set("kind", sp.kind);
 
