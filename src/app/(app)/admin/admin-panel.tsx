@@ -41,6 +41,18 @@ export function AdminPanel() {
     onError: (e: Error) => toast.show(e.message, "err"),
   });
 
+  const transcode = useMutation({
+    mutationFn: () =>
+      apiFetch("/api/admin/regenerate-media?transcode=1", { method: "POST" }),
+    onSuccess: (r: { queued: number }) =>
+      toast.show(
+        r.queued > 0
+          ? `${r.queued}개 영상을 브라우저 재생용으로 변환하고 있어요 (몇 분 걸려요)`
+          : "변환할 영상이 없어요",
+      ),
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+
   const pct = s?.quota ? Math.min(100, Math.round((s.totalBytes / s.quota) * 100)) : null;
 
   return (
@@ -56,6 +68,15 @@ export function AdminPanel() {
             onClick={() => regen.mutate()}
           >
             메타데이터 재생성
+          </Button>
+          <Button
+            variant="ghost"
+            size="md"
+            className="border border-border"
+            loading={transcode.isPending}
+            onClick={() => transcode.mutate()}
+          >
+            브라우저 재생용 변환
           </Button>
           <Button
             variant="ghost"
