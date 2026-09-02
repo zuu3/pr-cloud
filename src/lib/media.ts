@@ -85,8 +85,9 @@ const PART_SIZE = 8 << 20; // 8 MiB
 
 async function buildProxy(videoId: string, srcUrl: string): Promise<string | null> {
   const key = `promo-video/proxy/${videoId}.mp4`;
-  const ff = spawn(FFMPEG, [
+  const ffArgs = [
     "-nostdin",
+    "-threads", "1", // leave a core for the web server on this 2-vCPU box
     "-i", srcUrl,
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
     "-c:a", "aac", "-b:a", "160k",
@@ -94,7 +95,9 @@ async function buildProxy(videoId: string, srcUrl: string): Promise<string | nul
     "-movflags", "frag_keyframe+empty_moov+default_base_moof",
     "-f", "mp4",
     "pipe:1",
-  ]);
+  ];
+  // run niced so a transcode never starves request handling
+  const ff = spawn("nice", ["-n", "19", FFMPEG, ...ffArgs]);
   let stderr = "";
   ff.stderr.on("data", (d) => {
     stderr = (stderr + d.toString()).slice(-4000);
