@@ -734,14 +734,15 @@ export function VideoGrid({
         </div>
       ) : (
         (() => {
-          const containerCls =
-            view === "grid"
-              ? "mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-              : "mt-6 flex flex-col divide-y divide-border overflow-hidden rounded-2xl border border-border";
+          // motion Reorder is 1D — force the list layout while reordering
+          const gridView = view === "grid" && !reorderMode;
+          const containerCls = gridView
+            ? "mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            : "mt-6 flex flex-col divide-y divide-border overflow-hidden rounded-2xl border border-border";
 
           const renderItem = (v: Video, i: number) => {
             const checked = sel.has(v.id);
-            if (view === "list") {
+            if (!gridView) {
               return (
                 <Link
                   href={`/v/${v.id}`}
@@ -927,15 +928,15 @@ export function VideoGrid({
                   key={v.id}
                   initial={
                     animateCards.current
-                      ? view === "grid"
+                      ? gridView
                         ? { opacity: 0, y: 10 }
                         : { opacity: 0 }
                       : false
                   }
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
-                    duration: view === "grid" ? 0.25 : 0.2,
-                    delay: Math.min(i, view === "grid" ? 11 : 14) * (view === "grid" ? 0.03 : 0.015),
+                    duration: gridView ? 0.25 : 0.2,
+                    delay: Math.min(i, gridView ? 11 : 14) * (gridView ? 0.03 : 0.015),
                     ease: "easeOut",
                   }}
                 >
