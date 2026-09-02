@@ -89,6 +89,10 @@ async function buildProxy(videoId: string, srcUrl: string): Promise<string | nul
     "-nostdin",
     "-threads", "1", // leave a core for the web server on this 2-vCPU box
     "-i", srcUrl,
+    // a browser proxy doesn't need 4K — cap at 1080p (only downscales), and
+    // force 8-bit 4:2:0 so 10-bit / 4:2:2 HEVC sources still play everywhere
+    "-vf",
+    "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,format=yuv420p",
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
     "-c:a", "aac", "-b:a", "160k",
     // fragmented mp4 so a non-seekable pipe still produces a streamable file
