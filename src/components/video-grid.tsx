@@ -385,8 +385,15 @@ export function VideoGrid({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
   );
+  const draggedRef = useRef(false); // true during / just after a sort drag, so the click that follows doesn't navigate
+  function handleDragStart() {
+    draggedRef.current = true;
+  }
   function handleDragEnd(e: DragEndEvent) {
     const { active, over } = e;
+    setTimeout(() => {
+      draggedRef.current = false;
+    }, 60);
     if (!over || active.id === over.id) return;
     const from = videos.findIndex((v) => v.id === active.id);
     const to = videos.findIndex((v) => v.id === over.id);
@@ -814,7 +821,7 @@ export function VideoGrid({
                   onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
                   onClick={(e) => {
                     if (reorderMode) {
-                      e.preventDefault();
+                      if (draggedRef.current) e.preventDefault();
                       return;
                     }
                     if (selMode) {
@@ -878,7 +885,7 @@ export function VideoGrid({
                 onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
                 onClick={(e) => {
                   if (reorderMode) {
-                    e.preventDefault();
+                    if (draggedRef.current) e.preventDefault();
                     return;
                   }
                   if (selMode) {
@@ -959,6 +966,7 @@ export function VideoGrid({
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                 >
                   <SortableContext
