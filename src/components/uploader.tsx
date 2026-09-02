@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { useDialog } from "@/components/ui/dialog";
 import { MAX_FOLDER_DEPTH, depthOf, type FolderNode } from "@/lib/folders";
 
-const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv|mts|m2ts|wmv|flv|mpg|mpeg|3gp|ogv)$/i;
+const MEDIA_EXT = /\.(mp4|mov|m4v|webm|avi|mkv|mts|m2ts|wmv|flv|mpg|mpeg|3gp|ogv|jpe?g|png|gif|webp|heic|heif|tiff?|bmp)$/i;
 
 export function Uploader({ folders }: { folders: FolderNode[] }) {
   const { addFiles, addFilesWithFolders } = useUpload();
@@ -68,10 +68,10 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
 
   async function takeTree(fileList: FileList) {
     const picked = Array.from(fileList).filter(
-      (f) => f.type.startsWith("video/") || VIDEO_EXT.test(f.name),
+      (f) => /^(video|image)\//.test(f.type) || MEDIA_EXT.test(f.name),
     );
     if (picked.length === 0) {
-      toast.show("폴더 안에 영상 파일이 없어요", "err");
+      toast.show("폴더 안에 영상·사진 파일이 없어요", "err");
       return;
     }
     const files = await screenDupes(picked);
@@ -136,7 +136,7 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
 
   return (
     <main className="mx-auto max-w-[760px] px-4 sm:px-6 py-10 sm:py-12">
-      <h1 className="text-[28px] font-bold tracking-[-0.01em] text-foreground">영상 업로드</h1>
+      <h1 className="text-[28px] font-bold tracking-[-0.01em] text-foreground">영상·사진 업로드</h1>
       <p className="mt-2 text-[15px] leading-[1.6] text-body">
         큰 파일도 자동으로 나눠서 올라가고, 중간에 끊겨도 이어서 올라가요.
       </p>
@@ -174,13 +174,13 @@ export function Uploader({ folders }: { folders: FolderNode[] }) {
           <IconUpload />
         </div>
         <p className="mt-3 text-[15px] font-semibold text-foreground">
-          영상을 여기로 끌어다 놓으세요
+          영상·사진을 여기로 끌어다 놓으세요
         </p>
         <p className="mt-1 text-[13px] text-muted">또는 클릭해서 파일 선택 · 여러 개 가능</p>
         <input
           ref={inputRef}
           type="file"
-          accept="video/*"
+          accept="video/*,image/*"
           multiple
           hidden
           onChange={(e) => e.target.files && take(e.target.files)}

@@ -27,8 +27,17 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     return (
       <Shell>
         <h1 className="text-[22px] font-bold tracking-[-0.01em] text-foreground">{info.title}</h1>
-        <div className="mt-4 overflow-hidden rounded-2xl border border-border">
-          <video controls className="aspect-video w-full bg-black" src={`/s/${token}/url`} />
+        <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-black">
+          {info.mediaKind === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/s/${token}/url`}
+              alt={info.title}
+              className="mx-auto max-h-[75vh] w-full object-contain"
+            />
+          ) : (
+            <video controls className="aspect-video w-full bg-black" src={`/s/${token}/url`} />
+          )}
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <a

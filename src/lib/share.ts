@@ -18,13 +18,14 @@ export function shareLinkDead(link: {
 export type ShareVideo = {
   id: string;
   title: string;
+  mediaKind: "video" | "image";
   durationSec: number | null;
   thumbKey: string | null;
   playableInBrowser: boolean | null;
 };
 
 export type ResolvedShare =
-  | { kind: "video"; title: string; videoId: string }
+  | { kind: "video"; title: string; videoId: string; mediaKind: "video" | "image" }
   | { kind: "folder"; title: string; folderId: string; videos: ShareVideo[] };
 
 export async function resolveShare(token: string): Promise<ResolvedShare | null> {
@@ -35,7 +36,12 @@ export async function resolveShare(token: string): Promise<ResolvedShare | null>
   if (!link || shareLinkDead(link)) return null;
 
   if (link.video) {
-    return { kind: "video", title: link.video.title, videoId: link.video.id };
+    return {
+      kind: "video",
+      title: link.video.title,
+      videoId: link.video.id,
+      mediaKind: link.video.kind,
+    };
   }
   if (link.folder) {
     const folders = await prisma.folder.findMany({
@@ -48,12 +54,25 @@ export async function resolveShare(token: string): Promise<ResolvedShare | null>
       select: {
         id: true,
         title: true,
+        kind: true,
         durationSec: true,
         thumbKey: true,
         playableInBrowser: true,
       },
     });
-    return { kind: "folder", title: link.folder.name, folderId: link.folder.id, videos };
+    return {
+      kind: "folder",
+      title: link.folder.name,
+      folderId: link.folder.id,
+      videos: videos.map((v) => ({
+        id: v.id,
+        title: v.title,
+        mediaKind: v.kind,
+        durationSec: v.durationSec,
+        thumbKey: v.thumbKey,
+        playableInBrowser: v.playableInBrowser,
+      })),
+    };
   }
   return null;
 }

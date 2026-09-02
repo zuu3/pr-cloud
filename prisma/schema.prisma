@@ -26,6 +26,11 @@ enum VideoStatus {
   failed
 }
 
+enum MediaKind {
+  video
+  image
+}
+
 model User {
   email     String     @id
   role      Role       @default(member)
@@ -62,6 +67,7 @@ model Video {
   contentType      String?
   originalFilename String
   status           VideoStatus @default(pending)
+  kind             MediaKind   @default(video)
   durationSec      Int?
   thumbKey         String?
   playableInBrowser Boolean?

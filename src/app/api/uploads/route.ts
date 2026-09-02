@@ -37,6 +37,7 @@ export async function POST(request: Request) {
         s3Key: key,
         sizeBytes: BigInt(d.size),
         contentType: d.contentType,
+        kind: d.contentType.startsWith("image/") ? "image" : "video",
         originalFilename: d.originalFilename,
         status: "pending",
         uploadedBy: user.email,
