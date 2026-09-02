@@ -10,7 +10,7 @@ import { MAX_FOLDER_DEPTH } from "@/lib/folders";
 import { IconFolder, IconFilm, IconPlay, IconCheck, IconGrid, IconList } from "@/components/ui/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, Reorder } from "motion/react";
 import { useMutation } from "@tanstack/react-query";
 import { humanSize, humanDuration } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ type Video = {
   title: string;
   sizeBytes: number | null;
   originalFilename: string;
+  uploadedBy: string | null;
   kind: "video" | "image";
   durationSec: number | null;
   thumbUrl: string | null;
@@ -47,6 +48,7 @@ const SORTS = [
   ["title", "제목순"],
   ["size", "용량순"],
   ["views", "조회수순"],
+  ["custom", "수동 순서"],
 ] as const;
 
 const DATE_RANGES = [
@@ -61,7 +63,100 @@ const KINDS = [
   ["image", "사진만"],
 ] as const;
 
-export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder[] }) {
+function EditableTitle({
+  id,
+  title,
+  canEdit,
+  onSaved,
+  className,
+}: {
+  id: string;
+  title: string;
+  canEdit: boolean;
+  onSaved: (t: string) => void;
+  className: string;
+}) {
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(title);
+  const m = useMutation({
+    mutationFn: (t: string) =>
+      apiFetch(`/api/videos/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: t }),
+      }),
+    onSuccess: (_d, t) => {
+      onSaved(t);
+      setEditing(false);
+      toast.show("제목을 바꿨어요");
+    },
+    onError: (e: Error) => {
+      toast.show(e.message, "err");
+      setVal(title);
+      setEditing(false);
+    },
+  });
+
+  if (!editing) {
+    return (
+      <p
+        className={`${className} ${canEdit ? "cursor-text" : ""}`}
+        title={canEdit ? "더블클릭해서 이름 바꾸기" : undefined}
+        onDoubleClick={
+          canEdit
+            ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setVal(title);
+                setEditing(true);
+              }
+            : undefined
+        }
+      >
+        {title}
+      </p>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      value={val}
+      maxLength={200}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={() => {
+        const t = val.trim();
+        if (t && t !== title) m.mutate(t);
+        else setEditing(false);
+      }}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") {
+          setVal(title);
+          setEditing(false);
+        }
+      }}
+      className={`${className} w-full rounded-md border border-primary bg-canvas px-1 outline-none`}
+    />
+  );
+}
+
+export function VideoGrid({
+  initial,
+  folders,
+  me,
+  isAdmin,
+}: {
+  initial: Page;
+  folders: Folder[];
+  me: string;
+  isAdmin: boolean;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const dialog = useDialog();
@@ -222,6 +317,30 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
       setCursor(page.nextCursor);
     }
     setLoadingMore(false);
+  }
+
+  const canEdit = (v: Video) => isAdmin || v.uploadedBy === me;
+  const patchTitle = (id: string, title: string) =>
+    setVideos((list) => list.map((x) => (x.id === id ? { ...x, title } : x)));
+
+  const reorderMode = sort === "custom" && !selMode && videos.length > 1;
+  const reorderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reorderM = useMutation({
+    mutationFn: (orderedIds: string[]) =>
+      apiFetch("/api/videos/reorder", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ folderId: folderId ?? null, orderedIds }),
+      }),
+    onError: (e: Error) => toast.show(e.message, "err"),
+  });
+  function onReorder(next: Video[]) {
+    setVideos(next);
+    if (reorderTimer.current) clearTimeout(reorderTimer.current);
+    reorderTimer.current = setTimeout(
+      () => reorderM.mutate(next.map((v) => v.id)),
+      600,
+    );
   }
 
   const selAnchor = useRef<number | null>(null);
@@ -609,95 +728,80 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
           )}
         </div>
       ) : (
-        <div
-          className={
+        (() => {
+          const containerCls =
             view === "grid"
               ? "mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-              : "mt-6 flex flex-col divide-y divide-border overflow-hidden rounded-2xl border border-border"
-          }
-        >
-          {videos.map((v, i) => {
-            const checked = sel.has(v.id);
+              : "mt-6 flex flex-col divide-y divide-border overflow-hidden rounded-2xl border border-border";
 
+          const renderItem = (v: Video, i: number) => {
+            const checked = sel.has(v.id);
             if (view === "list") {
               return (
-                <motion.div
-                  key={v.id}
-                  initial={animateCards.current ? { opacity: 0 } : false}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2, delay: Math.min(i, 14) * 0.015 }}
+                <Link
+                  href={`/v/${v.id}`}
+                  draggable={!reorderMode}
+                  onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
+                  onClick={(e) => {
+                    if (selMode) {
+                      e.preventDefault();
+                      toggleAt(i, e.shiftKey);
+                    }
+                  }}
+                  className={`group flex items-center gap-3 px-3 py-2.5 transition-colors ${
+                    checked ? "bg-weak-bg" : "bg-canvas hover:bg-surface"
+                  }`}
                 >
-                  <Link
-                    href={`/v/${v.id}`}
-                    draggable
-                    onDragStart={(e) => onCardDragStart(e, v.id)}
-                    onClick={(e) => {
-                      if (selMode) {
-                        e.preventDefault();
-                        toggleAt(i, e.shiftKey);
-                      }
-                    }}
-                    className={`group flex items-center gap-3 px-3 py-2.5 transition-colors ${
-                      checked ? "bg-weak-bg" : "bg-canvas hover:bg-surface"
-                    }`}
-                  >
-                    {selMode && (
-                      <span
-                        className={`grid size-5 shrink-0 place-items-center rounded-full border text-[12px] ${
-                          checked
-                            ? "border-primary bg-primary text-white"
-                            : "border-border text-transparent"
-                        }`}
-                      >
-                        <IconCheck className="size-3" />
+                  {reorderMode && <span className="shrink-0 text-[15px] text-muted/60">⠿</span>}
+                  {selMode && (
+                    <span
+                      className={`grid size-5 shrink-0 place-items-center rounded-full border text-[12px] ${
+                        checked
+                          ? "border-primary bg-primary text-white"
+                          : "border-border text-transparent"
+                      }`}
+                    >
+                      <IconCheck className="size-3" />
+                    </span>
+                  )}
+                  <div className="relative h-11 w-[74px] shrink-0 overflow-hidden rounded-md bg-surface">
+                    {v.thumbUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={v.thumbUrl} alt="" className="size-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="grid size-full place-items-center text-[16px] text-muted/40">
+                        {v.kind === "image" ? <IconFilm /> : <IconPlay />}
+                      </div>
+                    )}
+                    {v.playableInBrowser === false && (
+                      <span className="absolute inset-x-0 bottom-0 bg-foreground/80 text-center text-[9px] font-medium text-white">
+                        DL
                       </span>
                     )}
-                    <div className="relative h-11 w-[74px] shrink-0 overflow-hidden rounded-md bg-surface">
-                      {v.thumbUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={v.thumbUrl}
-                          alt=""
-                          className="size-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="grid size-full place-items-center text-[16px] text-muted/40">
-                          {v.kind === "image" ? <IconFilm /> : <IconPlay />}
-                        </div>
-                      )}
-                      {v.playableInBrowser === false && (
-                        <span className="absolute inset-x-0 bottom-0 bg-foreground/80 text-center text-[9px] font-medium text-white">
-                          DL
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-medium text-foreground">{v.title}</p>
-                      <p className="mt-0.5 truncate text-[12px] text-muted">
-                        {v.kind === "image" ? "사진 · " : ""}
-                        {humanSize(v.sizeBytes)} · 조회 {v.viewCount}
-                        {v.durationSec != null ? ` · ${humanDuration(v.durationSec)}` : ""} ·{" "}
-                        {new Date(v.createdAt).toLocaleDateString("ko-KR")}
-                      </p>
-                    </div>
-                  </Link>
-                </motion.div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <EditableTitle
+                      id={v.id}
+                      title={v.title}
+                      canEdit={canEdit(v)}
+                      onSaved={(t) => patchTitle(v.id, t)}
+                      className="truncate text-[14px] font-medium text-foreground"
+                    />
+                    <p className="mt-0.5 truncate text-[12px] text-muted">
+                      {v.kind === "image" ? "사진 · " : ""}
+                      {humanSize(v.sizeBytes)} · 조회 {v.viewCount}
+                      {v.durationSec != null ? ` · ${humanDuration(v.durationSec)}` : ""} ·{" "}
+                      {new Date(v.createdAt).toLocaleDateString("ko-KR")}
+                    </p>
+                  </div>
+                </Link>
               );
             }
-
             return (
-              <motion.div
-                key={v.id}
-                initial={animateCards.current ? { opacity: 0, y: 10 } : false}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: Math.min(i, 11) * 0.03, ease: "easeOut" }}
-                whileTap={{ scale: 0.985 }}
-              >
               <Link
                 href={`/v/${v.id}`}
-                draggable
-                onDragStart={(e) => onCardDragStart(e, v.id)}
+                draggable={!reorderMode}
+                onDragStart={reorderMode ? undefined : (e) => onCardDragStart(e, v.id)}
                 onClick={(e) => {
                   if (selMode) {
                     e.preventDefault();
@@ -710,6 +814,11 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                     : "border-border hover:-translate-y-1 hover:border-primary hover:shadow-[0_8px_24px_-12px_rgba(25,31,40,0.15)]"
                 }`}
               >
+                {reorderMode && (
+                  <span className="absolute right-2.5 top-2.5 z-10 text-[15px] text-white/80 drop-shadow">
+                    ⠿
+                  </span>
+                )}
                 {selMode && (
                   <span
                     className={`absolute left-2.5 top-2.5 z-10 grid size-6 place-items-center rounded-full border text-[13px] ${
@@ -724,12 +833,7 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                 <div className="relative aspect-video bg-surface">
                   {v.thumbUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={v.thumbUrl}
-                      alt=""
-                      className="size-full object-cover"
-                      loading="lazy"
-                    />
+                    <img src={v.thumbUrl} alt="" className="size-full object-cover" loading="lazy" />
                   ) : (
                     <div className="grid size-full place-items-center text-[28px] text-muted/40">
                       {v.kind === "image" ? <IconFilm /> : <IconPlay />}
@@ -752,17 +856,74 @@ export function VideoGrid({ initial, folders }: { initial: Page; folders: Folder
                   )}
                 </div>
                 <div className="p-4">
-                  <p className="truncate text-[15px] font-semibold text-foreground">{v.title}</p>
+                  <EditableTitle
+                    id={v.id}
+                    title={v.title}
+                    canEdit={canEdit(v)}
+                    onSaved={(t) => patchTitle(v.id, t)}
+                    className="truncate text-[15px] font-semibold text-foreground"
+                  />
                   <p className="mt-1 text-[12px] text-muted">
                     {humanSize(v.sizeBytes)} · 조회 {v.viewCount} ·{" "}
                     {new Date(v.createdAt).toLocaleDateString("ko-KR")}
                   </p>
                 </div>
               </Link>
-              </motion.div>
             );
-          })}
-        </div>
+          };
+
+          if (reorderMode) {
+            return (
+              <>
+                <p className="mt-4 text-[12px] text-muted">
+                  끌어서 순서를 바꿔요. 순서는 자동으로 저장돼요.
+                </p>
+                <Reorder.Group
+                  axis="y"
+                  as="div"
+                  values={videos}
+                  onReorder={onReorder}
+                  className={containerCls}
+                >
+                  {videos.map((v, i) => (
+                    <Reorder.Item
+                      key={v.id}
+                      value={v}
+                      as="div"
+                      className="cursor-grab touch-none active:cursor-grabbing"
+                    >
+                      {renderItem(v, i)}
+                    </Reorder.Item>
+                  ))}
+                </Reorder.Group>
+              </>
+            );
+          }
+          return (
+            <div className={containerCls}>
+              {videos.map((v, i) => (
+                <motion.div
+                  key={v.id}
+                  initial={
+                    animateCards.current
+                      ? view === "grid"
+                        ? { opacity: 0, y: 10 }
+                        : { opacity: 0 }
+                      : false
+                  }
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: view === "grid" ? 0.25 : 0.2,
+                    delay: Math.min(i, view === "grid" ? 11 : 14) * (view === "grid" ? 0.03 : 0.015),
+                    ease: "easeOut",
+                  }}
+                >
+                  {renderItem(v, i)}
+                </motion.div>
+              ))}
+            </div>
+          );
+        })()
       )}
 
       {cursor && (

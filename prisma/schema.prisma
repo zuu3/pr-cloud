@@ -72,6 +72,7 @@ model Video {
   thumbKey         String?
   playableInBrowser Boolean?
   viewCount        Int         @default(0)
+  position         Int?
   uploadedBy       String?
   deletedAt        DateTime?
   createdAt        DateTime    @default(now())

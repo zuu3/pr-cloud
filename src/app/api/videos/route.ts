@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
 import type { Prisma } from "@prisma/client";
 
-type SortKey = "new" | "old" | "title" | "size" | "views";
+type SortKey = "new" | "old" | "title" | "size" | "views" | "custom";
 
 const orderBy: Record<SortKey, Prisma.VideoOrderByWithRelationInput[]> = {
   new: [{ createdAt: "desc" }, { id: "desc" }],
@@ -11,6 +11,8 @@ const orderBy: Record<SortKey, Prisma.VideoOrderByWithRelationInput[]> = {
   title: [{ title: "asc" }, { id: "asc" }],
   size: [{ sizeBytes: "desc" }, { id: "desc" }],
   views: [{ viewCount: "desc" }, { id: "desc" }],
+  // manual order; never-positioned videos fall to the bottom by recency
+  custom: [{ position: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }, { id: "desc" }],
 };
 
 export async function GET(request: Request) {
@@ -53,6 +55,7 @@ export async function GET(request: Request) {
         sizeBytes: true,
         contentType: true,
         originalFilename: true,
+        uploadedBy: true,
         kind: true,
         durationSec: true,
         thumbKey: true,
