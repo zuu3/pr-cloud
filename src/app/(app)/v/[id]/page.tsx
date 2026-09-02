@@ -18,12 +18,19 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
   if (!video || video.status !== "ready" || video.deletedAt) notFound();
 
   const canManage = user.role === "admin" || video.uploadedBy === user.email;
-  const folders = canManage
-    ? await prisma.folder.findMany({
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, parentId: true },
-      })
-    : [];
+  const [folders, parentFolder] = await Promise.all([
+    canManage
+      ? prisma.folder.findMany({
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, parentId: true },
+        })
+      : Promise.resolve([]),
+    video.folderId
+      ? prisma.folder.findUnique({ where: { id: video.folderId }, select: { name: true } })
+      : Promise.resolve(null),
+  ]);
+  const backHref = video.folderId ? `/?folderId=${video.folderId}` : "/";
+  const backLabel = parentFolder?.name ?? "보관함";
   const isImage = video.kind === "image";
   const poster = video.thumbKey ? `/api/thumb/${video.id}` : null;
   // hand the player a ready-to-use URL so playback starts without an extra RTT
@@ -48,7 +55,7 @@ export default async function VideoDetail({ params }: { params: Promise<{ id: st
 
   return (
     <main className="mx-auto max-w-[860px] px-4 sm:px-6 py-8 sm:py-10">
-      <BackLink />
+      <BackLink href={backHref}>{backLabel}</BackLink>
 
       <EditableMeta
         videoId={video.id}
